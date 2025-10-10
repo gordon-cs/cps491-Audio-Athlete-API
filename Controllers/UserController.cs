@@ -14,11 +14,9 @@ namespace AivenApi.Controllers
             _connectionString = config.GetConnectionString("DefaultDb");
         }
 
-
-//--------------------------------------------------//
-//                  GET USERS                       //
-//--------------------------------------------------//
-
+        //--------------------------------------------------//
+        //                  GET USERS                       //
+        //--------------------------------------------------//
         [HttpGet]
         public async Task<IActionResult> GetUsers()
         {
@@ -54,9 +52,9 @@ namespace AivenApi.Controllers
             }
         }
 
-//--------------------------------------------------//
-//                  POST USERS                      //
-//--------------------------------------------------//
+        //--------------------------------------------------//
+        //                  POST USERS                      //
+        //--------------------------------------------------//
         [HttpPost]
         public async Task<IActionResult> AddUser([FromBody] UserDto newUser)
         {
@@ -99,8 +97,47 @@ namespace AivenApi.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+
+        //--------------------------------------------------//
+        //                 DELETE USER                      //
+        //--------------------------------------------------//
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteUser(int id)
+    {
+        if (id <= 0)
+        {
+            return BadRequest(new { error = "Invalid user ID." });
+        }
+
+        try
+        {
+            await using var connection = new MySqlConnection(_connectionString);
+            await connection.OpenAsync();
+
+            var query = "DELETE FROM `users` WHERE `id` = @id;";
+            await using var command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@id", id);
+
+            var rowsAffected = await command.ExecuteNonQueryAsync();
+
+            if (rowsAffected > 0)
+            {
+                return Ok(new { message = "User deleted successfully!" });
+            }
+            else
+            {
+                return NotFound(new { error = "User not found." });
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
+}
+    // DTO class outside of the controller
     public class UserDto
     {
         public string Name { get; set; } = string.Empty;
@@ -108,5 +145,3 @@ namespace AivenApi.Controllers
         public string UserType { get; set; } = string.Empty;
     }
 }
-
-
