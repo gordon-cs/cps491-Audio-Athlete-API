@@ -14,6 +14,11 @@ namespace AivenApi.Controllers
             _connectionString = config.GetConnectionString("DefaultDb");
         }
 
+
+//--------------------------------------------------//
+//                  GET USERS                       //
+//--------------------------------------------------//
+
         [HttpGet]
         public async Task<IActionResult> GetUsers()
         {
@@ -24,7 +29,6 @@ namespace AivenApi.Controllers
                 await using var connection = new MySqlConnection(_connectionString);
                 await connection.OpenAsync();
 
-                // Select all columns
                 var query = "SELECT `id`, `name`, `password`, `user_type` FROM `users` LIMIT 10;";
                 await using var command = new MySqlCommand(query, connection);
 
@@ -45,12 +49,14 @@ namespace AivenApi.Controllers
             }
             catch (Exception ex)
             {
-                // Log full exception in terminal for debugging
                 Console.WriteLine(ex.ToString());
                 return StatusCode(500, new { error = ex.Message });
             }
         }
-// POST /api/users
+
+//--------------------------------------------------//
+//                  POST USERS                      //
+//--------------------------------------------------//
         [HttpPost]
         public async Task<IActionResult> AddUser([FromBody] UserDto newUser)
         {
@@ -95,12 +101,11 @@ namespace AivenApi.Controllers
         }
     }
 
-    // DTO for POST request
     public class UserDto
     {
         public string Name { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
-        public string UserType { get; set; } = string.Empty; // "coach" or "player"
+        public string UserType { get; set; } = string.Empty;
     }
 }
 
