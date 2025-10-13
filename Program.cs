@@ -4,11 +4,13 @@ builder.Services.AddControllers();
 
 var app = builder.Build();
 
-app.MapGet("/test", () => "Hello World!"); // Optional test endpoint
-
 app.MapControllers();
 
-app.UseAuthorization();
+// Root route
+app.MapGet("/", () => "Audio Athlete API is running!");
+
+// Listen on Fly.io port
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+app.Urls.Add($"http://*:{port}");
 
 app.Run();
-
