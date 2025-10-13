@@ -27,7 +27,10 @@ namespace AivenApi.Controllers
                 await using var connection = new MySqlConnection(_connectionString);
                 await connection.OpenAsync();
 
-                var query = "SELECT `id`, `name`, `password`, `user_type` FROM `users` LIMIT 10;";
+                var query = @"SELECT `id`, `name`, `password`, `user_type` 
+                            FROM `users` 
+                            LIMIT 10;
+                    ";
                 await using var command = new MySqlCommand(query, connection);
 
                 await using var reader = await command.ExecuteReaderAsync();
@@ -114,7 +117,9 @@ namespace AivenApi.Controllers
             await using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
 
-            var query = "DELETE FROM `users` WHERE `id` = @id;";
+            var query = @"DELETE FROM `users` 
+                        WHERE `id` = @id;
+            ";
             await using var command = new MySqlCommand(query, connection);
             command.Parameters.AddWithValue("@id", id);
 
