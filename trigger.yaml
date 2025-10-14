@@ -1,0 +1,24 @@
+name: "audio-athlete-api-trigger"
+description: "Trigger build and deploy when pushing to main branch"
+github:
+  owner: "Hls5235"
+  name: "Audio-Athlete-API"
+  push:
+    branch: "main"
+build:
+  steps:
+    - name: 'gcr.io/cloud-builders/docker'
+      args: ['build', '-t', 'gcr.io/$PROJECT_ID/audio-athlete-api', '.']
+    - name: 'gcr.io/cloud-builders/docker'
+      args: ['push', 'gcr.io/$PROJECT_ID/audio-athlete-api']
+    - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+      entrypoint: gcloud
+      args: [
+        'run', 'deploy', 'audio-athlete-api',
+        '--image', 'gcr.io/$PROJECT_ID/audio-athlete-api',
+        '--region', 'us-central1',
+        '--platform', 'managed',
+        '--allow-unauthenticated'
+      ]
+  images:
+    - 'gcr.io/$PROJECT_ID/audio-athlete-api'
