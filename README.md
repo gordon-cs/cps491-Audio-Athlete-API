@@ -16,4 +16,3 @@ Project Documents:
 
 The goal is to create an app with various workout categories that play timely voice prompts for each workout. The app should allow players to listen to their own music, but have the music fade with the training prompts taking priority when necessary.
 
-**TEST**
