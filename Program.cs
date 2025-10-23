@@ -1,26 +1,13 @@
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAll", policy =>
-    {
-        policy.AllowAnyOrigin()    
-              .AllowAnyMethod()
-              .AllowAnyHeader();
-    });
-});
-
+// Add services
 builder.Services.AddControllers();
 
 var app = builder.Build();
-
-app.UseCors("AllowAll");
-
 app.MapControllers();
 
-app.MapGet("/", () => "Audio Athlete API is running!");
-
+// Get port from environment or default to 8080
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-app.Urls.Add($"http://*:{port}");
+app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();
