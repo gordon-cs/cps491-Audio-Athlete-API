@@ -1,6 +1,0 @@
-@AivenApi_HostAddress = http://localhost:5080
-
-GET {{AivenApi_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
