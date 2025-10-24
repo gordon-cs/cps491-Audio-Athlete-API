@@ -27,8 +27,8 @@ namespace AivenApi.Controllers
                 await using var connection = new MySqlConnection(_connectionString);
                 await connection.OpenAsync();
 
-                var query = @"SELECT `id`, `name`, `password`, `user_type` 
-                            FROM `users` 
+                var query = @"SELECT 'id', 'name', 'password', 'user_type', 'team_id'
+                            FROM 'users' 
                             LIMIT 10;
                     ";
                 await using var command = new MySqlCommand(query, connection);
@@ -74,7 +74,7 @@ namespace AivenApi.Controllers
                 await connection.OpenAsync();
 
                 var query = @"
-                    INSERT INTO `users` (`name`, `password`, `user_type`) 
+                    INSERT INTO 'users' ('name', 'password', 'user_type') 
                     VALUES (@name, @password, @userType);
                 ";
 
@@ -117,8 +117,8 @@ namespace AivenApi.Controllers
             await using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
 
-            var query = @"DELETE FROM `users` 
-                        WHERE `id` = @id;
+            var query = @"DELETE FROM 'users' 
+                        WHERE 'id' = @id;
             ";
             await using var command = new MySqlCommand(query, connection);
             command.Parameters.AddWithValue("@id", id);
