@@ -27,10 +27,11 @@ namespace AivenApi.Controllers
                 await using var connection = new MySqlConnection(_connectionString);
                 await connection.OpenAsync();
 
-                var query = @"SELECT 'id', 'name', 'password', 'user_type', 'team_id'
-                            FROM 'users' 
+                var query = @"
+                            SELECT id, name, password, user_type, team_id
+                            FROM users
                             LIMIT 10;
-                    ";
+                ";
                 await using var command = new MySqlCommand(query, connection);
 
                 await using var reader = await command.ExecuteReaderAsync();
