@@ -1,22 +1,18 @@
-# Stage 1: Build your app
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/aspnet:7.0 AS base
 WORKDIR /app
-
-# Copy only the project file first (caching purposes)
-COPY *.csproj ./
-RUN dotnet restore
-
-# Copy everything else and build
-COPY . ./
-RUN dotnet publish -c Release -o out
-
-# Stage 2: Run your app
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
-WORKDIR /app
-COPY --from=build /app/out .
-
-# Tell Docker which port your app uses
 EXPOSE 8080
 
-# Command to run the app
-ENTRYPOINT ["dotnet", "AivenApi.dll"]
+FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
+WORKDIR /src
+COPY ["AudioAthleteApi.csproj", "./"]
+RUN dotnet restore "./AudioAthleteApi.csproj"
+COPY . .
+RUN dotnet build "AudioAthleteApi.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "AudioAthleteApi.csproj" -c Release -o /app/publish
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+ENTRYPOINT ["dotnet", "AudioAthleteApi.dll"]
