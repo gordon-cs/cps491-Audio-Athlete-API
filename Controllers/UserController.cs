@@ -77,14 +77,16 @@ namespace AivenApi.Controllers
                 await connection.OpenAsync();
 
                 var query = @"
-                    INSERT INTO 'users' ('name', 'password', 'user_type') 
-                    VALUES (@name, @password, @userType);
+                    INSERT INTO 'users' ('name', 'password', 'user_type', 'team_id') 
+                    VALUES (@name, @password, @userType, @teamId);
                 ";
 
                 await using var command = new MySqlCommand(query, connection);
                 command.Parameters.AddWithValue("@name", newUser.Name);
                 command.Parameters.AddWithValue("@password", newUser.Password);
                 command.Parameters.AddWithValue("@userType", newUser.UserType);
+                command.Parameters.AddWithValue("@teamId", newUser.TeamId);
+
 
                 var rowsAffected = await command.ExecuteNonQueryAsync();
 
