@@ -77,7 +77,7 @@ namespace AivenApi.Controllers
                 await connection.OpenAsync();
 
                 var query = @"
-                    INSERT INTO 'users' ('name', 'password', 'user_type', 'team_id') 
+                    INSERT INTO users (name, password, user_type, team_id) 
                     VALUES (@name, @password, @userType, @teamId);
                 ";
 
@@ -122,8 +122,8 @@ namespace AivenApi.Controllers
             await using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
 
-            var query = @"DELETE FROM 'users' 
-                        WHERE 'id' = @id;
+            var query = @"DELETE FROM users 
+                        WHERE id = @id;
             ";
             await using var command = new MySqlCommand(query, connection);
             command.Parameters.AddWithValue("@id", id);
