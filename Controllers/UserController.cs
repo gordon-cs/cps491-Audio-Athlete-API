@@ -44,6 +44,8 @@ namespace AivenApi.Controllers
                         Name = reader["name"],
                         Password = reader["password"],
                         UserType = reader["user_type"]
+                        TeamId = reader["team_id"] == DBNull.Value ? null : reader["team_id"]
+
                     });
                 }
 
@@ -149,5 +151,7 @@ namespace AivenApi.Controllers
         public string Name { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string UserType { get; set; } = string.Empty;
+        public string TeamId { get; set; } = string.Empty;
+
     }
 }
