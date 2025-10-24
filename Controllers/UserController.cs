@@ -43,7 +43,7 @@ namespace AivenApi.Controllers
                         Id = reader["id"],
                         Name = reader["name"],
                         Password = reader["password"],
-                        UserType = reader["user_type"]
+                        UserType = reader["user_type"],
                         TeamId = reader["team_id"] == DBNull.Value ? null : reader["team_id"]
 
                     });
