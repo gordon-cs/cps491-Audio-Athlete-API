@@ -1,15 +1,39 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services
+// -----------------------------------------
+// ✅ Add CORS configuration here
+// -----------------------------------------
+var corsOrigin = builder.Configuration["CORS_ORIGIN"] ?? "*";
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+        policy
+            .WithOrigins(corsOrigin)
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+});
+
+// -----------------------------------------
+// Add other services (controllers, etc.)
+// -----------------------------------------
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
-app.MapControllers();
 
-// Read the PORT environment variable injected by Cloud Run, default to 8080
-var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-app.Urls.Add($"http://0.0.0.0:{port}");
+// -----------------------------------------
+// ✅ Enable CORS middleware
+// -----------------------------------------
+app.UseCors("AllowFrontend");
+
+// If using HTTPS redirection and authorization, keep them
+app.UseHttpsRedirection();
+app.UseAuthorization();
+
+app.MapControllers();
 
 app.Run();
