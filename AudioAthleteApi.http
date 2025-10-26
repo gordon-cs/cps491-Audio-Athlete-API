@@ -1,6 +1,6 @@
-@AivenApi_HostAddress = http://localhost:5080
+@AudioAthleteApi_HostAddress = http://localhost:5080
 
-GET {{AivenApi_HostAddress}}/weatherforecast/
+GET {{AudioAthleteApi_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###

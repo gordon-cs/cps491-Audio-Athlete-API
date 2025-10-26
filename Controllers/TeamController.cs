@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MySqlConnector;
 
-namespace AivenApi.Controllers
+namespace AudioAthleteApi.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
