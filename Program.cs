@@ -4,9 +4,7 @@ using Microsoft.Extensions.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// -----------------------------------------
-// ✅ Add CORS configuration here
-// -----------------------------------------
+
 var corsOrigin = builder.Configuration["CORS_ORIGIN"] ?? "*";
 
 builder.Services.AddCors(options =>
@@ -18,19 +16,14 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod());
 });
 
-// -----------------------------------------
-// Add other services (controllers, etc.)
-// -----------------------------------------
+
 builder.Services.AddControllers();
 
 var app = builder.Build();
 
-// -----------------------------------------
-// ✅ Enable CORS middleware
-// -----------------------------------------
+
 app.UseCors("AllowFrontend");
 
-// If using HTTPS redirection and authorization, keep them
 app.UseHttpsRedirection();
 app.UseAuthorization();
 
