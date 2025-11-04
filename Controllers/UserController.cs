@@ -28,7 +28,7 @@ namespace AudioAthleteApi.Controllers
                 await connection.OpenAsync();
 
                 var query = @"
-                    SELECT id, name, password, user_type, team_id
+                    SELECT id, name, password, user_type, coach_email, team_id
                     FROM users
                     LIMIT 10;
                 ";
@@ -44,6 +44,7 @@ namespace AudioAthleteApi.Controllers
                         Name = reader["name"],
                         Password = reader["password"],
                         UserType = reader["user_type"],
+                        Email = reader["coach_email"] == DBNull.Value ? null : reader["coach_email"],
                         TeamId = reader["team_id"] == DBNull.Value ? null : reader["team_id"]
                     });
                 }
@@ -79,29 +80,36 @@ namespace AudioAthleteApi.Controllers
                 int userId;
                 int? teamIdToAssign = null;
 
-                var insertUserQuery = @"
-                    INSERT INTO users (name, password, user_type)
-                    VALUES (@name, @password, @userType);
-                    SELECT LAST_INSERT_ID();
-                ";
-
-                await using (var insertUserCmd = new MySqlCommand(insertUserQuery, connection, transaction))
-                {
-                    insertUserCmd.Parameters.AddWithValue("@name", newUser.Name);
-                    insertUserCmd.Parameters.AddWithValue("@password", newUser.Password);
-                    insertUserCmd.Parameters.AddWithValue("@userType", newUser.UserType);
-                    userId = Convert.ToInt32(await insertUserCmd.ExecuteScalarAsync());
-                }
-
                 //--------------------------------------------------//
-                //                COACH CREATION FLOW                //
+                //           COACH VALIDATION AND INSERT            //
                 //--------------------------------------------------//
                 if (newUser.UserType.Equals("coach", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (string.IsNullOrWhiteSpace(newUser.Email))
+                    {
+                        await transaction.RollbackAsync();
+                        return BadRequest(new { error = "Email is required when creating a coach." });
+                    }
+
                     if (string.IsNullOrWhiteSpace(newUser.TeamName))
                     {
                         await transaction.RollbackAsync();
                         return BadRequest(new { error = "Team name is required when creating a coach." });
+                    }
+
+                    var insertCoachQuery = @"
+                        INSERT INTO users (name, password, user_type, coach_email)
+                        VALUES (@name, @password, @userType, @coachEmail);
+                        SELECT LAST_INSERT_ID();
+                    ";
+
+                    await using (var insertCoachCmd = new MySqlCommand(insertCoachQuery, connection, transaction))
+                    {
+                        insertCoachCmd.Parameters.AddWithValue("@name", newUser.Name);
+                        insertCoachCmd.Parameters.AddWithValue("@password", newUser.Password);
+                        insertCoachCmd.Parameters.AddWithValue("@userType", newUser.UserType);
+                        insertCoachCmd.Parameters.AddWithValue("@coachEmail", newUser.Email);
+                        userId = Convert.ToInt32(await insertCoachCmd.ExecuteScalarAsync());
                     }
 
                     var insertTeamQuery = @"
@@ -135,6 +143,20 @@ namespace AudioAthleteApi.Controllers
                     {
                         await transaction.RollbackAsync();
                         return BadRequest(new { error = "CoachId is required when creating a player." });
+                    }
+
+                    var insertPlayerQuery = @"
+                        INSERT INTO users (name, password, user_type)
+                        VALUES (@name, @password, @userType);
+                        SELECT LAST_INSERT_ID();
+                    ";
+
+                    await using (var insertPlayerCmd = new MySqlCommand(insertPlayerQuery, connection, transaction))
+                    {
+                        insertPlayerCmd.Parameters.AddWithValue("@name", newUser.Name);
+                        insertPlayerCmd.Parameters.AddWithValue("@password", newUser.Password);
+                        insertPlayerCmd.Parameters.AddWithValue("@userType", newUser.UserType);
+                        userId = Convert.ToInt32(await insertPlayerCmd.ExecuteScalarAsync());
                     }
 
                     var getCoachTeamQuery = @"
@@ -174,6 +196,11 @@ namespace AudioAthleteApi.Controllers
                         insertTeamPlayerCmd.Parameters.AddWithValue("@playerId", userId);
                         await insertTeamPlayerCmd.ExecuteNonQueryAsync();
                     }
+                }
+                else
+                {
+                    await transaction.RollbackAsync();
+                    return BadRequest(new { error = "Invalid user type. Must be 'coach' or 'player'." });
                 }
 
                 await transaction.CommitAsync();
@@ -239,7 +266,8 @@ namespace AudioAthleteApi.Controllers
         public string Name { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string UserType { get; set; } = string.Empty;
-        public int? CoachId { get; set; } 
+        public string? Email { get; set; } 
         public string? TeamName { get; set; } 
+        public int? CoachId { get; set; }
     }
 }
