@@ -28,7 +28,7 @@ namespace AudioAthleteApi.Controllers
                 await connection.OpenAsync();
 
                 var query = @"
-                    SELECT id, name, password, user_type, coach_email, team_id
+                    SELECT id, name, username, password, user_type, coach_email, team_id
                     FROM users
                     LIMIT 10;
                 ";
@@ -42,6 +42,7 @@ namespace AudioAthleteApi.Controllers
                     {
                         Id = reader["id"],
                         Name = reader["name"],
+                        Username = reader["username"],
                         Password = reader["password"],
                         UserType = reader["user_type"],
                         Email = reader["coach_email"] == DBNull.Value ? null : reader["coach_email"],
@@ -65,10 +66,11 @@ namespace AudioAthleteApi.Controllers
         public async Task<IActionResult> AddUser([FromBody] UserDto newUser)
         {
             if (string.IsNullOrWhiteSpace(newUser.Name) ||
+                string.IsNullOrWhiteSpace(newUser.Username) ||
                 string.IsNullOrWhiteSpace(newUser.Password) ||
                 string.IsNullOrWhiteSpace(newUser.UserType))
             {
-                return BadRequest(new { error = "Name, Password, and UserType are required." });
+                return BadRequest(new { error = "Name, Username, Password, and UserType are required." });
             }
 
             try
@@ -98,14 +100,15 @@ namespace AudioAthleteApi.Controllers
                     }
 
                     var insertCoachQuery = @"
-                        INSERT INTO users (name, password, user_type, coach_email)
-                        VALUES (@name, @password, @userType, @coachEmail);
+                        INSERT INTO users (name, username, password, user_type, coach_email)
+                        VALUES (@name, @username, @password, @userType, @coachEmail);
                         SELECT LAST_INSERT_ID();
                     ";
 
                     await using (var insertCoachCmd = new MySqlCommand(insertCoachQuery, connection, transaction))
                     {
                         insertCoachCmd.Parameters.AddWithValue("@name", newUser.Name);
+                        insertCoachCmd.Parameters.AddWithValue("@username", newUser.Username);
                         insertCoachCmd.Parameters.AddWithValue("@password", newUser.Password);
                         insertCoachCmd.Parameters.AddWithValue("@userType", newUser.UserType);
                         insertCoachCmd.Parameters.AddWithValue("@coachEmail", newUser.Email);
@@ -146,14 +149,15 @@ namespace AudioAthleteApi.Controllers
                     }
 
                     var insertPlayerQuery = @"
-                        INSERT INTO users (name, password, user_type)
-                        VALUES (@name, @password, @userType);
+                        INSERT INTO users (name, username, password, user_type)
+                        VALUES (@name, @username, @password, @userType);
                         SELECT LAST_INSERT_ID();
                     ";
 
                     await using (var insertPlayerCmd = new MySqlCommand(insertPlayerQuery, connection, transaction))
                     {
                         insertPlayerCmd.Parameters.AddWithValue("@name", newUser.Name);
+                        insertPlayerCmd.Parameters.AddWithValue("@username", newUser.Username);
                         insertPlayerCmd.Parameters.AddWithValue("@password", newUser.Password);
                         insertPlayerCmd.Parameters.AddWithValue("@userType", newUser.UserType);
                         userId = Convert.ToInt32(await insertPlayerCmd.ExecuteScalarAsync());
@@ -264,10 +268,11 @@ namespace AudioAthleteApi.Controllers
     public class UserDto
     {
         public string Name { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string UserType { get; set; } = string.Empty;
-        public string? Email { get; set; } 
-        public string? TeamName { get; set; } 
+        public string? Email { get; set; }
+        public string? TeamName { get; set; }
         public int? CoachId { get; set; }
     }
 }
