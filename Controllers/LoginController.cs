@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 namespace AudioAthleteApi.Controllers
+
 {
     [ApiController]
     [Route("api/[controller]")]
