@@ -4,64 +4,48 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-
 var builder = WebApplication.CreateBuilder(args);
 
-//--------------------------------------------------//
-//                     CORS                          //
-//--------------------------------------------------//
-var corsOrigin = builder.Configuration["CORS_ORIGIN"] ?? "*";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
-        policy
-            .WithOrigins(corsOrigin)
-            .AllowAnyHeader()
-            .AllowAnyMethod());
+        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 });
 
-//--------------------------------------------------//
-//                 CONTROLLERS                       //
-//--------------------------------------------------//
 builder.Services.AddControllers();
 
-//--------------------------------------------------//
-//                 JWT AUTHENTICATION                //
-//--------------------------------------------------//
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]);
-    options.TokenValidationParameters = new TokenValidationParameters
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
     {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(key)
-    };
-});
+        var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]);
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(key)
+        };
+    });
 
 var app = builder.Build();
 
-//--------------------------------------------------//
-//                  MIDDLEWARE                       //
-//--------------------------------------------------//
 app.UseCors("AllowFrontend");
-app.UseHttpsRedirection();
-
-app.UseAuthentication(); // <-- IMPORTANT: must come before UseAuthorization
+// app.UseHttpsRedirection(); // comment out for Cloud Run
+app.UseAuthentication();
 app.UseAuthorization();
-
-//--------------------------------------------------//
-//                  ENDPOINTS                        //
-//--------------------------------------------------//
 app.MapControllers();
+
+// --- LOG REGISTERED ENDPOINTS ---
+var dataSource = app.Services.GetRequiredService<EndpointDataSource>();
+Console.WriteLine("Registered endpoints:");
+foreach (var endpoint in dataSource.Endpoints)
+    Console.WriteLine(endpoint.DisplayName);
+
+// --- LISTEN ON CLOUD RUN PORT ---
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();
