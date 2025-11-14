@@ -56,6 +56,14 @@ app.UseAuthorization();
 //--------------------------------------------------//
 app.MapControllers();
 
+var endpoints = app.Services.GetRequiredService<EndpointDataSource>();
+Console.WriteLine("==== Registered Endpoints ====");
+foreach (var e in endpoints.Endpoints)
+{
+    Console.WriteLine(e.DisplayName);
+}
+Console.WriteLine("==== End of List ====");
+
 //--------------------------------------------------//
 //           LOG REGISTERED ENDPOINTS               //
 //--------------------------------------------------//
