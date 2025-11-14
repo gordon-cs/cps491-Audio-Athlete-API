@@ -32,7 +32,6 @@ namespace AudioAthleteApi.Controllers
                     FROM users
                     LIMIT 10;
                 ";
-
                 await using var command = new MySqlCommand(query, connection);
                 await using var reader = await command.ExecuteReaderAsync();
 
