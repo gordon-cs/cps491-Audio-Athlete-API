@@ -3,21 +3,32 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Routing;
 using System.Text;
+
 var builder = WebApplication.CreateBuilder(args);
 
+//--------------------------------------------------//
+//                     CORS                          //
+//--------------------------------------------------//
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
         policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 });
 
+//--------------------------------------------------//
+//                 CONTROLLERS                       //
+//--------------------------------------------------//
 builder.Services.AddControllers();
 
+//--------------------------------------------------//
+//                 JWT AUTHENTICATION                //
+//--------------------------------------------------//
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]);
+        var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing"));
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -32,19 +43,32 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 var app = builder.Build();
 
+//--------------------------------------------------//
+//                  MIDDLEWARE                       //
+//--------------------------------------------------//
 app.UseCors("AllowFrontend");
-// app.UseHttpsRedirection(); // comment out for Cloud Run
+// app.UseHttpsRedirection(); // optional for Cloud Run
 app.UseAuthentication();
 app.UseAuthorization();
+
+//--------------------------------------------------//
+//                  ENDPOINTS                        //
+//--------------------------------------------------//
 app.MapControllers();
 
-// --- LOG REGISTERED ENDPOINTS ---
+//--------------------------------------------------//
+//           LOG REGISTERED ENDPOINTS               //
+//--------------------------------------------------//
 var dataSource = app.Services.GetRequiredService<EndpointDataSource>();
 Console.WriteLine("Registered endpoints:");
 foreach (var endpoint in dataSource.Endpoints)
+{
     Console.WriteLine(endpoint.DisplayName);
+}
 
-// --- LISTEN ON CLOUD RUN PORT ---
+//--------------------------------------------------//
+//           LISTEN ON CLOUD RUN PORT               //
+//--------------------------------------------------//
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 app.Urls.Add($"http://0.0.0.0:{port}");
 
