@@ -5,7 +5,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 
-namespace AudioAthleteApi.Controllers
+namespace AudioAthleteApi.Controllers 
 {
     [ApiController]
     [Route("api/[controller]")]
