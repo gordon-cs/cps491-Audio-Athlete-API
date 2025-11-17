@@ -5,21 +5,23 @@ namespace AudioAthleteApi.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class TestController : ControllerBase
+    public class UsersController : ControllerBase
     {
         private readonly string _connectionString;
 
-        public TestController(IConfiguration config)
+        public UsersController(IConfiguration config)
         {
-            _connectionString = config.GetConnectionString("DefaultDb") ?? throw new InvalidOperationException("DefaultDb connection string missing");
+            _connectionString = config.GetConnectionString("DefaultDb");
         }
 
         //--------------------------------------------------//
-        //                 GET TEST DATA                    //
+        //                  GET USERS                       //
         //--------------------------------------------------//
         [HttpGet]
-        public async Task<IActionResult> GetTest()
+        public async Task<IActionResult> GetUsers()
         {
+            var results = new List<object>();
+
             try
             {
                 await using var connection = new MySqlConnection(_connectionString);
@@ -57,7 +59,7 @@ namespace AudioAthleteApi.Controllers
             }
         }
         //--------------------------------------------------//
-        //                 POST TEST DATA                   //
+        //                  POST USERS                      //
         //--------------------------------------------------//
         [HttpPost]
         public async Task<IActionResult> AddUser([FromBody] UserDto newUser)
@@ -271,9 +273,9 @@ namespace AudioAthleteApi.Controllers
     }
 
     //--------------------------------------------------//
-    //                    DTO CLASS                     //
+    //                    DTO CLASS                    //
     //--------------------------------------------------//
-    public class TestDto
+    public class UserDto
     {
         public string Name { get; set; } = string.Empty;
         public string Username { get; set; } = string.Empty;
