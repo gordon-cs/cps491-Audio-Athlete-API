@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MySqlConnector;
+using Isopoh.Cryptography.Argon2;
+using System.Text;
 
 namespace AudioAthleteApi.Controllers
 {
@@ -32,6 +34,7 @@ namespace AudioAthleteApi.Controllers
                     FROM users
                     LIMIT 10;
                 ";
+
                 await using var command = new MySqlCommand(query, connection);
                 await using var reader = await command.ExecuteReaderAsync();
 
@@ -58,6 +61,7 @@ namespace AudioAthleteApi.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+
         //--------------------------------------------------//
         //                  POST USERS                      //
         //--------------------------------------------------//
@@ -108,7 +112,7 @@ namespace AudioAthleteApi.Controllers
                     {
                         cmd.Parameters.AddWithValue("@name", newUser.Name);
                         cmd.Parameters.AddWithValue("@username", newUser.Username);
-                        cmd.Parameters.AddWithValue("@password", newUser.Password);
+                        cmd.Parameters.AddWithValue("@password", HashPassword(newUser.Password));
                         cmd.Parameters.AddWithValue("@userType", newUser.UserType);
                         cmd.Parameters.AddWithValue("@coachEmail", newUser.Email);
 
@@ -125,6 +129,7 @@ namespace AudioAthleteApi.Controllers
                     {
                         cmd.Parameters.AddWithValue("@teamName", newUser.TeamName);
                         cmd.Parameters.AddWithValue("@coachId", userId);
+
                         teamIdToAssign = Convert.ToInt32(await cmd.ExecuteScalarAsync());
                     }
 
@@ -133,6 +138,7 @@ namespace AudioAthleteApi.Controllers
                     {
                         cmd.Parameters.AddWithValue("@teamId", teamIdToAssign);
                         cmd.Parameters.AddWithValue("@coachId", userId);
+
                         await cmd.ExecuteNonQueryAsync();
                     }
                 }
@@ -142,7 +148,6 @@ namespace AudioAthleteApi.Controllers
                 //--------------------------------------------------//
                 else if (newUser.UserType.Equals("player", StringComparison.OrdinalIgnoreCase))
                 {
-                    // REQUIRE POSITION FOR PLAYERS
                     if (string.IsNullOrWhiteSpace(newUser.Position))
                     {
                         await transaction.RollbackAsync();
@@ -165,7 +170,7 @@ namespace AudioAthleteApi.Controllers
                     {
                         cmd.Parameters.AddWithValue("@name", newUser.Name);
                         cmd.Parameters.AddWithValue("@username", newUser.Username);
-                        cmd.Parameters.AddWithValue("@password", newUser.Password);
+                        cmd.Parameters.AddWithValue("@password", HashPassword(newUser.Password));
                         cmd.Parameters.AddWithValue("@userType", newUser.UserType);
                         cmd.Parameters.AddWithValue("@position", newUser.Position);
 
@@ -179,6 +184,7 @@ namespace AudioAthleteApi.Controllers
                     await using (var cmd = new MySqlCommand(getCoachTeamQuery, connection, transaction))
                     {
                         cmd.Parameters.AddWithValue("@coachId", newUser.CoachId);
+
                         var result = await cmd.ExecuteScalarAsync();
 
                         if (result == null || result == DBNull.Value)
@@ -195,18 +201,7 @@ namespace AudioAthleteApi.Controllers
                     {
                         cmd.Parameters.AddWithValue("@teamId", teamIdToAssign);
                         cmd.Parameters.AddWithValue("@playerId", userId);
-                        await cmd.ExecuteNonQueryAsync();
-                    }
 
-                    var insertTeamPlayerQuery = @"
-                        INSERT INTO team_players (team_id, player_id)
-                        VALUES (@teamId, @playerId);
-                    ";
-
-                    await using (var cmd = new MySqlCommand(insertTeamPlayerQuery, connection, transaction))
-                    {
-                        cmd.Parameters.AddWithValue("@teamId", teamIdToAssign);
-                        cmd.Parameters.AddWithValue("@playerId", userId);
                         await cmd.ExecuteNonQueryAsync();
                     }
                 }
@@ -231,7 +226,6 @@ namespace AudioAthleteApi.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
-
 
         //--------------------------------------------------//
         //                 DELETE USER                      //
@@ -270,10 +264,35 @@ namespace AudioAthleteApi.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+
+        //--------------------------------------------------//
+        //               PASSWORD HASHING                   //
+        //--------------------------------------------------//
+        private string HashPassword(string password)
+        {
+            byte[] salt = new byte[16];
+            System.Security.Cryptography.RandomNumberGenerator.Fill(salt);
+
+            var config = new Argon2Config
+            {
+                Type = Argon2Type.DataIndependentAddressing, 
+                TimeCost = 4,
+                MemoryCost = 1024 * 64,
+                Lanes = 4,
+                Threads = 4,
+                Salt = salt,
+                Password = Encoding.UTF8.GetBytes(password)
+            };
+
+            using var argon2 = new Argon2(config);
+            var hash = argon2.Hash();
+
+            return config.EncodeString(hash.Buffer);
+        }
     }
 
     //--------------------------------------------------//
-    //                    DTO CLASS                    //
+    //                    DTO CLASS                     //
     //--------------------------------------------------//
     public class UserDto
     {

@@ -4,6 +4,7 @@ using MySqlConnector;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Isopoh.Cryptography.Argon2;
 
 namespace AudioAthleteApi.Controllers
 {
@@ -27,9 +28,7 @@ namespace AudioAthleteApi.Controllers
         public async Task<IActionResult> Login([FromBody] LoginDto credentials)
         {
             if (string.IsNullOrWhiteSpace(credentials.Username) || string.IsNullOrWhiteSpace(credentials.Password))
-            {
                 return BadRequest(new { error = "Username and password are required." });
-            }
 
             try
             {
@@ -37,28 +36,27 @@ namespace AudioAthleteApi.Controllers
                 await connection.OpenAsync();
 
                 var query = @"
-                    SELECT id, name, username, user_type, coach_email, team_id
+                    SELECT id, name, username, password, user_type, coach_email, team_id
                     FROM users
-                    WHERE username = @username AND password = @password
+                    WHERE username = @username
                     LIMIT 1;
                 ";
+                await using var cmd = new MySqlCommand(query, connection);
+                cmd.Parameters.AddWithValue("@username", credentials.Username);
 
-                await using var command = new MySqlCommand(query, connection);
-                command.Parameters.AddWithValue("@username", credentials.Username);
-                command.Parameters.AddWithValue("@password", credentials.Password);
-
-                await using var reader = await command.ExecuteReaderAsync();
+                await using var reader = await cmd.ExecuteReaderAsync();
 
                 if (!await reader.ReadAsync())
-                {
                     return Unauthorized(new { error = "Invalid username or password." });
-                }
+
+                string storedHash = reader["password"].ToString();
+
+                if (!Argon2.Verify(storedHash, credentials.Password))
+                    return Unauthorized(new { error = "Invalid username or password." });
 
                 var userId = Convert.ToInt32(reader["id"]);
                 var username = reader["username"].ToString();
 
-
-                // Generate JWT
                 var token = GenerateJwtToken(userId, username);
 
                 var user = new
