@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MySqlConnector;
+using Isopoh.Cryptography.Argon2;
+using System.Text;
 
 namespace AudioAthleteApi.Controllers
 {
@@ -104,7 +106,7 @@ namespace AudioAthleteApi.Controllers
                     {
                         cmd.Parameters.AddWithValue("@name", newUser.Name);
                         cmd.Parameters.AddWithValue("@username", newUser.Username);
-                        cmd.Parameters.AddWithValue("@password", newUser.Password);
+                        cmd.Parameters.AddWithValue("@password", HashPassword(newUser.Password));
                         cmd.Parameters.AddWithValue("@userType", newUser.UserType);
                         cmd.Parameters.AddWithValue("@coachEmail", newUser.Email);
 
@@ -131,6 +133,7 @@ namespace AudioAthleteApi.Controllers
                     {
                         cmd.Parameters.AddWithValue("@teamId", teamIdToAssign);
                         cmd.Parameters.AddWithValue("@coachId", userId);
+
                         await cmd.ExecuteNonQueryAsync();
                     }
                 }
@@ -156,7 +159,7 @@ namespace AudioAthleteApi.Controllers
                     {
                         cmd.Parameters.AddWithValue("@name", newUser.Name);
                         cmd.Parameters.AddWithValue("@username", newUser.Username);
-                        cmd.Parameters.AddWithValue("@password", newUser.Password);
+                        cmd.Parameters.AddWithValue("@password", HashPassword(newUser.Password));
                         cmd.Parameters.AddWithValue("@userType", newUser.UserType);
                         cmd.Parameters.AddWithValue("@position", newUser.Position);
 
@@ -240,6 +243,31 @@ namespace AudioAthleteApi.Controllers
                 Console.WriteLine(ex);
                 return StatusCode(500, new { error = ex.Message });
             }
+        }
+
+        //--------------------------------------------------//
+        //               PASSWORD HASHING                   //
+        //--------------------------------------------------//
+        private string HashPassword(string password)
+        {
+            byte[] salt = new byte[16];
+            System.Security.Cryptography.RandomNumberGenerator.Fill(salt);
+
+            var config = new Argon2Config
+            {
+                Type = Argon2Type.DataIndependentAddressing, 
+                TimeCost = 4,
+                MemoryCost = 1024 * 64,
+                Lanes = 4,
+                Threads = 4,
+                Salt = salt,
+                Password = Encoding.UTF8.GetBytes(password)
+            };
+
+            using var argon2 = new Argon2(config);
+            var hash = argon2.Hash();
+
+            return config.EncodeString(hash.Buffer);
         }
     }
 
