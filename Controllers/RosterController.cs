@@ -37,6 +37,7 @@ namespace AudioAthleteApi.Controllers
                 var teamQuery = @"SELECT team_id FROM users WHERE id = @coachId AND user_type = 'coach';";
 
                 int? teamId = null;
+
                 await using (var cmd = new MySqlCommand(teamQuery, connection, transaction))
                 {
                     cmd.Parameters.AddWithValue("@coachId", coachId);
@@ -67,18 +68,6 @@ namespace AudioAthleteApi.Controllers
                     cmd.Parameters.AddWithValue("@teamId", teamId);
 
                     playerId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
-                }
-
-                var linkQuery = @"
-                    INSERT INTO team_players (team_id, player_id)
-                    VALUES (@teamId, @playerId);
-                ";
-
-                await using (var cmd = new MySqlCommand(linkQuery, connection, transaction))
-                {
-                    cmd.Parameters.AddWithValue("@teamId", teamId);
-                    cmd.Parameters.AddWithValue("@playerId", playerId);
-                    await cmd.ExecuteNonQueryAsync();
                 }
 
                 await transaction.CommitAsync();
@@ -122,7 +111,7 @@ namespace AudioAthleteApi.Controllers
                 cmd.Parameters.AddWithValue("@playerId", playerId);
                 cmd.Parameters.AddWithValue("@name", update.Name ?? (object)DBNull.Value);
                 cmd.Parameters.AddWithValue("@username", update.Username ?? (object)DBNull.Value);
-                cmd.Parameters.AddWithValue("@password", update.Password ?? (object)DBNull.Value); 
+                cmd.Parameters.AddWithValue("@password", update.Password ?? (object)DBNull.Value);
                 cmd.Parameters.AddWithValue("@position", update.Position ?? (object)DBNull.Value);
 
                 var rows = await cmd.ExecuteNonQueryAsync();
@@ -151,29 +140,18 @@ namespace AudioAthleteApi.Controllers
             {
                 await using var connection = new MySqlConnection(_connectionString);
                 await connection.OpenAsync();
-                await using var transaction = await connection.BeginTransactionAsync();
-
-                var deleteLink = @"DELETE FROM team_players WHERE player_id = @playerId;";
-                await using (var cmd = new MySqlCommand(deleteLink, connection, transaction))
-                {
-                    cmd.Parameters.AddWithValue("@playerId", playerId);
-                    await cmd.ExecuteNonQueryAsync();
-                }
 
                 var deleteUser = @"DELETE FROM users WHERE id = @playerId AND user_type = 'player';";
-                await using (var cmd = new MySqlCommand(deleteUser, connection, transaction))
+
+                await using var cmd = new MySqlCommand(deleteUser, connection);
+                cmd.Parameters.AddWithValue("@playerId", playerId);
+
+                var rows = await cmd.ExecuteNonQueryAsync();
+
+                if (rows == 0)
                 {
-                    cmd.Parameters.AddWithValue("@playerId", playerId);
-                    var rows = await cmd.ExecuteNonQueryAsync();
-
-                    if (rows == 0)
-                    {
-                        await transaction.RollbackAsync();
-                        return NotFound(new { error = "Player not found." });
-                    }
+                    return NotFound(new { error = "Player not found." });
                 }
-
-                await transaction.CommitAsync();
 
                 return Ok(new { message = "Player deleted successfully!" });
             }
@@ -201,6 +179,6 @@ namespace AudioAthleteApi.Controllers
         public string? Name { get; set; }
         public string? Username { get; set; }
         public string? Password { get; set; }
-        public string? Position {get; set;}
+        public string? Position { get; set; }
     }
 }

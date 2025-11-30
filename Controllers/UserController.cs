@@ -32,6 +32,7 @@ namespace AudioAthleteApi.Controllers
                     FROM users
                     LIMIT 10;
                 ";
+
                 await using var command = new MySqlCommand(query, connection);
                 await using var reader = await command.ExecuteReaderAsync();
 
@@ -58,6 +59,7 @@ namespace AudioAthleteApi.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+
         //--------------------------------------------------//
         //                  POST USERS                      //
         //--------------------------------------------------//
@@ -82,21 +84,15 @@ namespace AudioAthleteApi.Controllers
                 int? teamIdToAssign = null;
 
                 //--------------------------------------------------//
-                //           COACH VALIDATION AND INSERT            //
+                //                     COACH                       //
                 //--------------------------------------------------//
                 if (newUser.UserType.Equals("coach", StringComparison.OrdinalIgnoreCase))
                 {
                     if (string.IsNullOrWhiteSpace(newUser.Email))
-                    {
-                        await transaction.RollbackAsync();
                         return BadRequest(new { error = "Email is required when creating a coach." });
-                    }
 
                     if (string.IsNullOrWhiteSpace(newUser.TeamName))
-                    {
-                        await transaction.RollbackAsync();
                         return BadRequest(new { error = "Team name is required when creating a coach." });
-                    }
 
                     var insertCoachQuery = @"
                         INSERT INTO users (name, username, password, user_type, coach_email, position)
@@ -125,10 +121,12 @@ namespace AudioAthleteApi.Controllers
                     {
                         cmd.Parameters.AddWithValue("@teamName", newUser.TeamName);
                         cmd.Parameters.AddWithValue("@coachId", userId);
+
                         teamIdToAssign = Convert.ToInt32(await cmd.ExecuteScalarAsync());
                     }
 
                     var updateCoachQuery = @"UPDATE users SET team_id = @teamId WHERE id = @coachId;";
+
                     await using (var cmd = new MySqlCommand(updateCoachQuery, connection, transaction))
                     {
                         cmd.Parameters.AddWithValue("@teamId", teamIdToAssign);
@@ -138,22 +136,15 @@ namespace AudioAthleteApi.Controllers
                 }
 
                 //--------------------------------------------------//
-                //                PLAYER CREATION FLOW               //
+                //                     PLAYER                      //
                 //--------------------------------------------------//
                 else if (newUser.UserType.Equals("player", StringComparison.OrdinalIgnoreCase))
                 {
-                    // REQUIRE POSITION FOR PLAYERS
                     if (string.IsNullOrWhiteSpace(newUser.Position))
-                    {
-                        await transaction.RollbackAsync();
                         return BadRequest(new { error = "Position is required for players." });
-                    }
 
-                    if (newUser.CoachId == null)
-                    {
-                        await transaction.RollbackAsync();
+                    if (newUser.CoachId is null)
                         return BadRequest(new { error = "CoachId is required when creating a player." });
-                    }
 
                     var insertPlayerQuery = @"
                         INSERT INTO users (name, username, password, user_type, position)
@@ -179,40 +170,27 @@ namespace AudioAthleteApi.Controllers
                     await using (var cmd = new MySqlCommand(getCoachTeamQuery, connection, transaction))
                     {
                         cmd.Parameters.AddWithValue("@coachId", newUser.CoachId);
+
                         var result = await cmd.ExecuteScalarAsync();
 
                         if (result == null || result == DBNull.Value)
-                        {
-                            await transaction.RollbackAsync();
                             return BadRequest(new { error = "Invalid CoachId or coach has no team assigned." });
-                        }
 
                         teamIdToAssign = Convert.ToInt32(result);
                     }
 
                     var updatePlayerTeamQuery = @"UPDATE users SET team_id = @teamId WHERE id = @playerId;";
+
                     await using (var cmd = new MySqlCommand(updatePlayerTeamQuery, connection, transaction))
                     {
                         cmd.Parameters.AddWithValue("@teamId", teamIdToAssign);
                         cmd.Parameters.AddWithValue("@playerId", userId);
                         await cmd.ExecuteNonQueryAsync();
                     }
-
-                    var insertTeamPlayerQuery = @"
-                        INSERT INTO team_players (team_id, player_id)
-                        VALUES (@teamId, @playerId);
-                    ";
-
-                    await using (var cmd = new MySqlCommand(insertTeamPlayerQuery, connection, transaction))
-                    {
-                        cmd.Parameters.AddWithValue("@teamId", teamIdToAssign);
-                        cmd.Parameters.AddWithValue("@playerId", userId);
-                        await cmd.ExecuteNonQueryAsync();
-                    }
                 }
+
                 else
                 {
-                    await transaction.RollbackAsync();
                     return BadRequest(new { error = "Invalid user type. Must be 'coach' or 'player'." });
                 }
 
@@ -232,7 +210,6 @@ namespace AudioAthleteApi.Controllers
             }
         }
 
-
         //--------------------------------------------------//
         //                 DELETE USER                      //
         //--------------------------------------------------//
@@ -240,9 +217,7 @@ namespace AudioAthleteApi.Controllers
         public async Task<IActionResult> DeleteUser(int id)
         {
             if (id <= 0)
-            {
                 return BadRequest(new { error = "Invalid user ID." });
-            }
 
             try
             {
@@ -250,19 +225,15 @@ namespace AudioAthleteApi.Controllers
                 await connection.OpenAsync();
 
                 var query = @"DELETE FROM users WHERE id = @id;";
-                await using var command = new MySqlCommand(query, connection);
-                command.Parameters.AddWithValue("@id", id);
 
+                await using var command = new MySqlCommand(query, connection);
+
+                command.Parameters.AddWithValue("@id", id);
                 var rowsAffected = await command.ExecuteNonQueryAsync();
 
-                if (rowsAffected > 0)
-                {
-                    return Ok(new { message = "User deleted successfully!" });
-                }
-                else
-                {
-                    return NotFound(new { error = "User not found." });
-                }
+                return rowsAffected > 0
+                    ? Ok(new { message = "User deleted successfully!" })
+                    : NotFound(new { error = "User not found." });
             }
             catch (Exception ex)
             {
@@ -273,7 +244,7 @@ namespace AudioAthleteApi.Controllers
     }
 
     //--------------------------------------------------//
-    //                    DTO CLASS                    //
+    //                    DTO CLASS                     //
     //--------------------------------------------------//
     public class UserDto
     {
