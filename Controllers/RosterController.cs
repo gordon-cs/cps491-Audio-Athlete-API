@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MySqlConnector;
+using Isopoh.Cryptography.Argon2;
+using System.Text;
 
 namespace AudioAthleteApi.Controllers
 {
@@ -63,7 +65,7 @@ namespace AudioAthleteApi.Controllers
                 {
                     cmd.Parameters.AddWithValue("@name", player.Name);
                     cmd.Parameters.AddWithValue("@username", player.Username);
-                    cmd.Parameters.AddWithValue("@password", player.Password);
+                    cmd.Parameters.AddWithValue("@password", HashPassword(player.Password));
                     cmd.Parameters.AddWithValue("@position", player.Position);
                     cmd.Parameters.AddWithValue("@teamId", teamId);
 
@@ -111,15 +113,19 @@ namespace AudioAthleteApi.Controllers
                 cmd.Parameters.AddWithValue("@playerId", playerId);
                 cmd.Parameters.AddWithValue("@name", update.Name ?? (object)DBNull.Value);
                 cmd.Parameters.AddWithValue("@username", update.Username ?? (object)DBNull.Value);
-                cmd.Parameters.AddWithValue("@password", update.Password ?? (object)DBNull.Value);
+
+                // Hash if updating password, otherwise pass through
+                cmd.Parameters.AddWithValue("@password",
+                    update.Password != null
+                        ? HashPassword(update.Password)
+                        : (object)DBNull.Value);
+
                 cmd.Parameters.AddWithValue("@position", update.Position ?? (object)DBNull.Value);
 
                 var rows = await cmd.ExecuteNonQueryAsync();
 
                 if (rows == 0)
-                {
                     return NotFound(new { error = "Player not found or not a player." });
-                }
 
                 return Ok(new { message = "Player updated successfully!" });
             }
@@ -149,9 +155,7 @@ namespace AudioAthleteApi.Controllers
                 var rows = await cmd.ExecuteNonQueryAsync();
 
                 if (rows == 0)
-                {
                     return NotFound(new { error = "Player not found." });
-                }
 
                 return Ok(new { message = "Player deleted successfully!" });
             }
@@ -160,6 +164,31 @@ namespace AudioAthleteApi.Controllers
                 Console.WriteLine(ex);
                 return StatusCode(500, new { error = ex.Message });
             }
+        }
+
+        //--------------------------------------------------//
+        //               PASSWORD HASHING                   //
+        //--------------------------------------------------//
+        private string HashPassword(string password)
+        {
+            byte[] salt = new byte[16];
+            System.Security.Cryptography.RandomNumberGenerator.Fill(salt);
+
+            var config = new Argon2Config
+            {
+                Type = Argon2Type.DataIndependentAddressing,
+                TimeCost = 4,
+                MemoryCost = 1024 * 64,
+                Lanes = 4,
+                Threads = 4,
+                Salt = salt,
+                Password = Encoding.UTF8.GetBytes(password)
+            };
+
+            using var argon2 = new Argon2(config);
+            var hash = argon2.Hash();
+
+            return config.EncodeString(hash.Buffer);
         }
     }
 
