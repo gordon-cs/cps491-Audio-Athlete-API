@@ -34,8 +34,7 @@ namespace AudioAthleteApi.Controllers
                            t.coach_id, 
                            u.name AS coach_name
                     FROM teams t
-                    LEFT JOIN users u ON t.coach_id = u.id
-                    LIMIT 25;
+                    LEFT JOIN users u ON t.coach_id = u.id;
                 ";
 
                 await using var command = new MySqlCommand(query, connection);

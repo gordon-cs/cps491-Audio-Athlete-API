@@ -114,7 +114,6 @@ namespace AudioAthleteApi.Controllers
                 cmd.Parameters.AddWithValue("@name", update.Name ?? (object)DBNull.Value);
                 cmd.Parameters.AddWithValue("@username", update.Username ?? (object)DBNull.Value);
 
-                // Hash if updating password, otherwise pass through
                 cmd.Parameters.AddWithValue("@password",
                     update.Password != null
                         ? HashPassword(update.Password)

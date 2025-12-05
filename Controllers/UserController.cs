@@ -31,8 +31,7 @@ namespace AudioAthleteApi.Controllers
 
                 var query = @"
                     SELECT id, name, username, password, position, user_type, coach_email, team_id
-                    FROM users
-                    LIMIT 10;
+                    FROM users; 
                 ";
 
                 await using var command = new MySqlCommand(query, connection);
