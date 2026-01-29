@@ -28,11 +28,11 @@ namespace AudioAthleteApi.Controllers
                 await connection.OpenAsync();
 
                 var query = @"
-                    SELECT id, team_id, coach_id, title, total_length_sec, created_at, updated_at
+                    SELECT id, team_id, coach_id, title, total_length_sec
                     FROM saved_workouts
                     WHERE (@teamId IS NULL OR team_id = @teamId)
                       AND (@coachId IS NULL OR coach_id = @coachId)
-                    ORDER BY updated_at DESC;
+                    ORDER BY id DESC;
                 ";
 
                 await using var command = new MySqlCommand(query, connection);
@@ -49,8 +49,6 @@ namespace AudioAthleteApi.Controllers
                         CoachId = reader["coach_id"],
                         Title = reader["title"],
                         TotalLengthSec = reader["total_length_sec"],
-                        CreatedAt = reader["created_at"],
-                        UpdatedAt = reader["updated_at"]
                     });
                 }
 
@@ -165,6 +163,8 @@ namespace AudioAthleteApi.Controllers
                     return NotFound(new { error = "Workout not found." });
                 }
 
+                // NOTE: This assumes you already created saved_workout_prompts table.
+                // sort_order: using wp.id as a stable increasing order (works if wp.id increases with insertion)
                 var copyPrompts = @"
                     INSERT INTO saved_workout_prompts (saved_workout_id, sort_order, block_length, instruction)
                     SELECT @savedId, wp.id, wp.block_length, wp.instruction
