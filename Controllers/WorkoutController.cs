@@ -140,8 +140,90 @@ namespace AudioAthleteApi.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
-    }
+        //--------------------------------------------------//
+        //                 UPDATE WORKOUT                   //
+        //--------------------------------------------------//
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateWorkout(int id, [FromBody] WorkoutUpdateDto updatedWorkout)
+        {
+            if (id <= 0 || string.IsNullOrWhiteSpace(updatedWorkout.Title))
+                return BadRequest(new { error = "Invalid data provided." });
 
+            try
+            {
+                await using var connection = new MySqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                await using var transaction = await connection.BeginTransactionAsync();
+
+                try
+                {
+                    var updateWorkoutQuery = @"
+                        UPDATE workouts 
+                        SET title = @title, scheduled_date = @date 
+                        WHERE id = @id;";
+                    
+                    await using (var workoutCmd = new MySqlCommand(updateWorkoutQuery, connection, transaction))
+                    {
+                        workoutCmd.Parameters.AddWithValue("@title", updatedWorkout.Title);
+                        workoutCmd.Parameters.AddWithValue("@date", updatedWorkout.ScheduledDate);
+                        workoutCmd.Parameters.AddWithValue("@id", id);
+                        await workoutCmd.ExecuteNonQueryAsync();
+                    }
+
+                    var deletePromptsQuery = "DELETE FROM workout_prompts WHERE workout_id = @id;";
+                    await using (var deleteCmd = new MySqlCommand(deletePromptsQuery, connection, transaction))
+                    {
+                        deleteCmd.Parameters.AddWithValue("@id", id);
+                        await deleteCmd.ExecuteNonQueryAsync();
+                    }
+
+                    var insertPromptQuery = @"
+                        INSERT INTO workout_prompts (workout_id, block_length, instruction) 
+                        VALUES (@wId, @len, @instr);";
+
+                    int totalLength = 0;
+                    await using (var insertCmd = new MySqlCommand(insertPromptQuery, connection, transaction))
+                    {
+                        insertCmd.Parameters.Add("@wId", MySqlDbType.Int32).Value = id;
+                        insertCmd.Parameters.Add("@len", MySqlDbType.Int32);
+                        insertCmd.Parameters.Add("@instr", MySqlDbType.VarChar);
+
+                        foreach (var prompt in updatedWorkout.Prompts)
+                        {
+                            totalLength += prompt.BlockLength;
+                            
+                            insertCmd.Parameters["@len"].Value = prompt.BlockLength;
+                            insertCmd.Parameters["@instr"].Value = prompt.Instruction;
+                            
+                            await insertCmd.ExecuteNonQueryAsync();
+                        }
+                    }
+
+                    var updateLengthQuery = "UPDATE workouts SET total_length_sec = @total WHERE id = @id;";
+                    await using (var lengthCmd = new MySqlCommand(updateLengthQuery, connection, transaction))
+                    {
+                        lengthCmd.Parameters.AddWithValue("@total", totalLength);
+                        lengthCmd.Parameters.AddWithValue("@id", id);
+                        await lengthCmd.ExecuteNonQueryAsync();
+                    }
+
+                    await transaction.CommitAsync();
+                    return Ok(new { message = "Workout updated successfully!", totalLengthSec = totalLength });
+                }
+                catch (Exception)
+                {
+                    await transaction.RollbackAsync();
+                    throw; 
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = "Internal server error.", details = ex.Message });
+            }
+        }
+    }
+    
     //--------------------------------------------------//
     //                    DTO CLASS                    //
     //--------------------------------------------------//
@@ -151,5 +233,17 @@ namespace AudioAthleteApi.Controllers
         public int? CoachId { get; set; }
         public string Title { get; set; } = string.Empty;
         public DateTime? ScheduledDate { get; set; }
+    }
+        public class WorkoutUpdateDto
+    {
+        public string Title { get; set; } = string.Empty;
+        public DateTime? ScheduledDate { get; set; }
+        public List<WorkoutPromptUpdateDto> Prompts { get; set; } = new();
+    }
+
+    public class WorkoutPromptUpdateDto
+    {
+        public int BlockLength { get; set; }
+        public string Instruction { get; set; } = string.Empty;
     }
 }
