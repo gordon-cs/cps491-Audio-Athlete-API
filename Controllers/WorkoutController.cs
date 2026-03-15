@@ -222,10 +222,105 @@ namespace AudioAthleteApi.Controllers
                 return StatusCode(500, new { error = "Internal server error.", details = ex.Message });
             }
         }
+
+        //--------------------------------------------------//
+        //             POST WORKOUT COMPLETION              //
+        //--------------------------------------------------//
+        [HttpPost("{id}/complete")]
+        public async Task<IActionResult> CompleteWorkout(int id, [FromBody] WorkoutCompletionDto completion)
+        {
+            if (id <= 0 || completion.PlayerId <= 0)
+                return BadRequest(new { error = "Invalid workout ID or player ID." });
+
+            try
+            {
+                await using var connection = new MySqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                var query = @"
+                    INSERT INTO workout_completions (workout_id, player_id, completed, completed_at)
+                    VALUES (@workoutId, @playerId, TRUE, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        completed = TRUE,
+                        completed_at = NOW();
+                ";
+
+                await using var command = new MySqlCommand(query, connection);
+                command.Parameters.AddWithValue("@workoutId", id);
+                command.Parameters.AddWithValue("@playerId", completion.PlayerId);
+
+                await command.ExecuteNonQueryAsync();
+
+                return Ok(new
+                {
+                    message = "Workout marked as completed!",
+                    workoutId = id,
+                    playerId = completion.PlayerId
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        //--------------------------------------------------//
+        //           GET WORKOUT COMPLETION STATUS          //
+        //--------------------------------------------------//
+        [HttpGet("{id}/completed/{playerId}")]
+        public async Task<IActionResult> GetWorkoutCompletionStatus(int id, int playerId)
+        {
+            if (id <= 0 || playerId <= 0)
+                return BadRequest(new { error = "Invalid workout ID or player ID." });
+
+            try
+            {
+                await using var connection = new MySqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                var query = @"
+                    SELECT completed, completed_at
+                    FROM workout_completions
+                    WHERE workout_id = @workoutId AND player_id = @playerId
+                    LIMIT 1;
+                ";
+
+                await using var command = new MySqlCommand(query, connection);
+                command.Parameters.AddWithValue("@workoutId", id);
+                command.Parameters.AddWithValue("@playerId", playerId);
+
+                await using var reader = await command.ExecuteReaderAsync();
+
+                if (await reader.ReadAsync())
+                {
+                    return Ok(new
+                    {
+                        workoutId = id,
+                        playerId = playerId,
+                        completed = Convert.ToBoolean(reader["completed"]),
+                        completedAt = reader["completed_at"] == DBNull.Value ? null : reader["completed_at"]
+                    });
+                }
+
+                return Ok(new
+                {
+                    workoutId = id,
+                    playerId = playerId,
+                    completed = false,
+                    completedAt = (object?)null
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
     }
-    
+
     //--------------------------------------------------//
-    //                    DTO CLASS                    //
+    //                    DTO CLASS                      //
     //--------------------------------------------------//
     public class WorkoutDto
     {
@@ -234,7 +329,8 @@ namespace AudioAthleteApi.Controllers
         public string Title { get; set; } = string.Empty;
         public DateTime? ScheduledDate { get; set; }
     }
-        public class WorkoutUpdateDto
+
+    public class WorkoutUpdateDto
     {
         public string Title { get; set; } = string.Empty;
         public DateTime? ScheduledDate { get; set; }
@@ -245,5 +341,10 @@ namespace AudioAthleteApi.Controllers
     {
         public int BlockLength { get; set; }
         public string Instruction { get; set; } = string.Empty;
+    }
+
+    public class WorkoutCompletionDto
+    {
+        public int PlayerId { get; set; }
     }
 }
