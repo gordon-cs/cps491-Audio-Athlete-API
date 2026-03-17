@@ -564,6 +564,102 @@ namespace AudioAthleteApi.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+        //--------------------------------------------------//
+        //         GET OVERALL STATS FOR PROGRAM            //
+        //--------------------------------------------------//
+        [HttpGet("{id}/stats")]
+        public async Task<IActionResult> GetProgramStats(int id)
+        {
+            if (id <= 0)
+                return BadRequest(new { error = "Invalid program ID." });
+
+            try
+            {
+                await using var connection = new MySqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                var query = @"
+                    SELECT
+                        wp.id AS program_id,
+                        COUNT(DISTINCT wpi.workout_id) AS total_workouts,
+                        COUNT(DISTINCT u.id) AS total_players,
+                        COUNT(DISTINCT CASE 
+                            WHEN player_progress.completed_workouts = total_program_workouts.total_workouts
+                                AND total_program_workouts.total_workouts > 0
+                            THEN u.id 
+                        END) AS players_completed
+                    FROM workout_programs wp
+                    LEFT JOIN workout_program_items wpi
+                        ON wpi.program_id = wp.id
+                    LEFT JOIN users u
+                        ON u.team_id = wp.team_id
+                        AND u.user_type = 'player'
+                    LEFT JOIN (
+                        SELECT
+                            wc.player_id,
+                            wpi2.program_id,
+                            COUNT(DISTINCT wc.workout_id) AS completed_workouts
+                        FROM workout_completions wc
+                        JOIN workout_program_items wpi2
+                            ON wpi2.workout_id = wc.workout_id
+                        WHERE wc.completed = TRUE
+                        GROUP BY wc.player_id, wpi2.program_id
+                    ) AS player_progress
+                        ON player_progress.player_id = u.id
+                        AND player_progress.program_id = wp.id
+                    LEFT JOIN (
+                        SELECT
+                            program_id,
+                            COUNT(DISTINCT workout_id) AS total_workouts
+                        FROM workout_program_items
+                        GROUP BY program_id
+                    ) AS total_program_workouts
+                        ON total_program_workouts.program_id = wp.id
+                    WHERE wp.id = @programId
+                    GROUP BY wp.id, total_program_workouts.total_workouts;
+                ";
+
+                await using var command = new MySqlCommand(query, connection);
+                command.Parameters.AddWithValue("@programId", id);
+
+                await using var reader = await command.ExecuteReaderAsync();
+
+                if (await reader.ReadAsync())
+                {
+                    int totalWorkouts = reader["total_workouts"] == DBNull.Value
+                        ? 0
+                        : Convert.ToInt32(reader["total_workouts"]);
+
+                    int totalPlayers = reader["total_players"] == DBNull.Value
+                        ? 0
+                        : Convert.ToInt32(reader["total_players"]);
+
+                    int playersCompleted = reader["players_completed"] == DBNull.Value
+                        ? 0
+                        : Convert.ToInt32(reader["players_completed"]);
+
+                    double completionRate = totalPlayers > 0
+                        ? Math.Round((double)playersCompleted / totalPlayers * 100, 1)
+                        : 0;
+
+                    return Ok(new
+                    {
+                        ProgramId = id,
+                        TotalWorkouts = totalWorkouts,
+                        TotalPlayers = totalPlayers,
+                        PlayersCompleted = playersCompleted,
+                        CompletionRate = completionRate
+                    });
+                }
+
+                return NotFound(new { error = "Program not found." });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
     }
 
     //--------------------------------------------------//
