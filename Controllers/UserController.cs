@@ -21,6 +21,17 @@ namespace AudioAthleteApi.Controllers
             _connectionString = config.GetConnectionString("DefaultDb");
         }
 
+        //--------------------------------------------------//
+        //       HELPER FOR GENERATING JOIN CODE            //
+        //--------------------------------------------------//
+        private string GenerateJoinCode()
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            var random = new Random();
+            return new string(Enumerable.Repeat(chars, 6)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
+        }
+
         [HttpGet]
         public async Task<IActionResult> GetUsers()
         {
@@ -119,15 +130,17 @@ namespace AudioAthleteApi.Controllers
                         userId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
                     }
 
+                    // UPDATED: Added join_code to the INSERT statement
                     var insertTeamQuery = @"
-                        INSERT INTO teams (name, coach_id)
-                        VALUES (@teamName, @coachId);
+                        INSERT INTO teams (name, coach_id, join_code)
+                        VALUES (@teamName, @coachId, @joinCode);
                         SELECT LAST_INSERT_ID();
                     ";
                     await using (var cmd = new MySqlCommand(insertTeamQuery, connection, transaction))
                     {
                         cmd.Parameters.AddWithValue("@teamName", newUser.TeamName);
                         cmd.Parameters.AddWithValue("@coachId", userId);
+                        cmd.Parameters.AddWithValue("@joinCode", GenerateJoinCode()); // Generates code here
 
                         teamIdToAssign = Convert.ToInt32(await cmd.ExecuteScalarAsync());
                     }
@@ -222,6 +235,7 @@ namespace AudioAthleteApi.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+
         [HttpPost("join")]
         public async Task<IActionResult> JoinTeam([FromBody] JoinTeamDto joinRequest)
         {
@@ -257,6 +271,7 @@ namespace AudioAthleteApi.Controllers
             }
             catch (Exception ex) { return StatusCode(500, new { error = ex.Message }); }
         }
+
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
         {
@@ -449,6 +464,7 @@ namespace AudioAthleteApi.Controllers
         public string Token { get; set; } = string.Empty;
         public string NewPassword { get; set; } = string.Empty;
     }
+
     public class JoinTeamDto
     {
         public int UserId { get; set; }
