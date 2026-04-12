@@ -15,18 +15,7 @@ namespace AudioAthleteApi.Controllers
         }
 
         //--------------------------------------------------//
-        //       HELPER FOR GENERATING JOIN CODE            //
-        //--------------------------------------------------//
-        private string GenerateJoinCode()
-        {
-            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-            var random = new Random();
-            return new string(Enumerable.Repeat(chars, 6)
-                .Select(s => s[random.Next(s.Length)]).ToArray());
-        }
-
-        //--------------------------------------------------//
-        //                  GET ALL TEAMS                   //
+        //                  GET TEAMS                       //
         //--------------------------------------------------//
         [HttpGet]
         public async Task<IActionResult> GetTeams()
@@ -38,12 +27,11 @@ namespace AudioAthleteApi.Controllers
                 await using var connection = new MySqlConnection(_connectionString);
                 await connection.OpenAsync();
 
-                // Join teams with users to get the coach’s name and include join_code
+                // Join teams with users to get the coach’s name
                 var query = @"
                     SELECT t.id, 
                            t.name AS team_name, 
                            t.coach_id, 
-                           t.join_code,
                            u.name AS coach_name
                     FROM teams t
                     LEFT JOIN users u ON t.coach_id = u.id;
@@ -59,7 +47,6 @@ namespace AudioAthleteApi.Controllers
                         Id = reader["id"],
                         TeamName = reader["team_name"],
                         CoachId = reader["coach_id"],
-                        JoinCode = reader["join_code"] == DBNull.Value ? null : reader["join_code"],
                         CoachName = reader["coach_name"]
                     });
                 }
@@ -74,7 +61,7 @@ namespace AudioAthleteApi.Controllers
         }
 
         //--------------------------------------------------//
-        //                  GET TEAM BY ID                  //
+        //                  GET BY ID                       //
         //--------------------------------------------------//
         [HttpGet("{id}")]
         public async Task<IActionResult> GetTeamById(int id)
@@ -90,7 +77,6 @@ namespace AudioAthleteApi.Controllers
                     SELECT t.id, 
                            t.name AS team_name, 
                            t.coach_id, 
-                           t.join_code,
                            u.name AS coach_name
                     FROM teams t
                     LEFT JOIN users u ON t.coach_id = u.id
@@ -109,7 +95,6 @@ namespace AudioAthleteApi.Controllers
                         Id = reader["id"],
                         TeamName = reader["team_name"],
                         CoachId = reader["coach_id"],
-                        JoinCode = reader["join_code"] == DBNull.Value ? null : reader["join_code"],
                         CoachName = reader["coach_name"]
                     };
 
@@ -126,7 +111,7 @@ namespace AudioAthleteApi.Controllers
         }
 
         //--------------------------------------------------//
-        //                  CREATE NEW TEAM                 //
+        //                  POST TEAM                       //
         //--------------------------------------------------//
         [HttpPost]
         public async Task<IActionResult> AddTeam([FromBody] TeamDto newTeam)
@@ -141,7 +126,7 @@ namespace AudioAthleteApi.Controllers
                 await using var connection = new MySqlConnection(_connectionString);
                 await connection.OpenAsync();
 
-                // Validate coach exists and is actually a coach
+                // Validate coach exists and is a coach
                 var coachCheckQuery = @"SELECT COUNT(*) FROM users WHERE id = @coachId AND user_type = 'coach';";
                 await using (var coachCheck = new MySqlCommand(coachCheckQuery, connection))
                 {
@@ -151,16 +136,14 @@ namespace AudioAthleteApi.Controllers
                         return BadRequest(new { error = "Coach ID not found or not a coach." });
                 }
 
-                // Insert team WITH the generated join_code
                 var query = @"
-                    INSERT INTO teams (coach_id, name, join_code)
-                    VALUES (@coachId, @name, @joinCode);
+                    INSERT INTO teams (coach_id, name)
+                    VALUES (@coachId, @name);
                 ";
 
                 await using var command = new MySqlCommand(query, connection);
                 command.Parameters.AddWithValue("@coachId", newTeam.CoachId);
                 command.Parameters.AddWithValue("@name", newTeam.Name);
-                command.Parameters.AddWithValue("@joinCode", GenerateJoinCode());
 
                 var rowsAffected = await command.ExecuteNonQueryAsync();
 
@@ -177,7 +160,7 @@ namespace AudioAthleteApi.Controllers
         }
 
         //--------------------------------------------------//
-        //                   DELETE TEAM                    //
+        //                 DELETE TEAM                      //
         //--------------------------------------------------//
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteTeam(int id)
@@ -210,7 +193,7 @@ namespace AudioAthleteApi.Controllers
     }
 
     //--------------------------------------------------//
-    //                    TEAM DTO                      //
+    //                  TEAM DTO                        //
     //--------------------------------------------------//
     public class TeamDto
     {
