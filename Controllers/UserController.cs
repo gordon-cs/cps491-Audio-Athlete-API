@@ -222,7 +222,41 @@ namespace AudioAthleteApi.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+        [HttpPost("join")]
+        public async Task<IActionResult> JoinTeam([FromBody] JoinTeamDto joinRequest)
+        {
+            if (string.IsNullOrWhiteSpace(joinRequest.Code) || joinRequest.UserId <= 0)
+                return BadRequest(new { error = "User ID and Team Code are required." });
 
+            try
+            {
+                await using var connection = new MySqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                var findTeamQuery = "SELECT id FROM teams WHERE join_code = @code;";
+                int teamId;
+                await using (var cmd = new MySqlCommand(findTeamQuery, connection))
+                {
+                    cmd.Parameters.AddWithValue("@code", joinRequest.Code.ToUpper().Trim());
+                    var result = await cmd.ExecuteScalarAsync();
+                    if (result == null || result == DBNull.Value)
+                        return NotFound(new { error = "Invalid team code." });
+                    teamId = Convert.ToInt32(result);
+                }
+
+                var updateQuery = "UPDATE users SET team_id = @teamId WHERE id = @userId AND user_type = 'player';";
+                await using (var cmd = new MySqlCommand(updateQuery, connection))
+                {
+                    cmd.Parameters.AddWithValue("@teamId", teamId);
+                    cmd.Parameters.AddWithValue("@userId", joinRequest.UserId);
+                    var affected = await cmd.ExecuteNonQueryAsync();
+                    if (affected == 0) return BadRequest(new { error = "Update failed. Verify user is a player." });
+                }
+
+                return Ok(new { message = "Joined team successfully!", team_id = teamId });
+            }
+            catch (Exception ex) { return StatusCode(500, new { error = ex.Message }); }
+        }
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
         {
@@ -414,5 +448,10 @@ namespace AudioAthleteApi.Controllers
     {
         public string Token { get; set; } = string.Empty;
         public string NewPassword { get; set; } = string.Empty;
+    }
+    public class JoinTeamDto
+    {
+        public int UserId { get; set; }
+        public string Code { get; set; } = string.Empty;
     }
 }
