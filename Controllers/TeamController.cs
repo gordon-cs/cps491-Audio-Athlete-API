@@ -14,9 +14,6 @@ namespace AudioAthleteApi.Controllers
             _connectionString = config.GetConnectionString("DefaultDb");
         }
 
-        //--------------------------------------------------//
-        //       HELPER FOR GENERATING JOIN CODE            //
-        //--------------------------------------------------//
         private string GenerateJoinCode()
         {
             const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -38,7 +35,6 @@ namespace AudioAthleteApi.Controllers
                 await using var connection = new MySqlConnection(_connectionString);
                 await connection.OpenAsync();
 
-                // Join teams with users to get the coach’s name and include join_code
                 var query = @"
                     SELECT t.id, 
                            t.name AS team_name, 
@@ -99,24 +95,65 @@ namespace AudioAthleteApi.Controllers
 
                 await using var command = new MySqlCommand(query, connection);
                 command.Parameters.AddWithValue("@id", id);
-
                 await using var reader = await command.ExecuteReaderAsync();
 
                 if (await reader.ReadAsync())
                 {
-                    var result = new
+                    return Ok(new
                     {
                         Id = reader["id"],
                         TeamName = reader["team_name"],
                         CoachId = reader["coach_id"],
                         JoinCode = reader["join_code"] == DBNull.Value ? null : reader["join_code"],
                         CoachName = reader["coach_name"]
-                    };
-
-                    return Ok(result);
+                    });
                 }
 
                 return NotFound(new { error = "Team not found." });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        //--------------------------------------------------//
+        //        GET ALL PLAYERS ON A TEAM                 //
+        //--------------------------------------------------//
+        [HttpGet("{id}/players")]
+        public async Task<IActionResult> GetPlayersByTeam(int id)
+        {
+            if (id <= 0) return BadRequest(new { error = "Invalid team ID." });
+
+            try
+            {
+                await using var connection = new MySqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                var query = @"
+                    SELECT id, name, username, position
+                    FROM users
+                    WHERE team_id = @teamId AND user_type = 'player';
+                ";
+
+                await using var command = new MySqlCommand(query, connection);
+                command.Parameters.AddWithValue("@teamId", id);
+                await using var reader = await command.ExecuteReaderAsync();
+
+                var players = new List<object>();
+                while (await reader.ReadAsync())
+                {
+                    players.Add(new
+                    {
+                        Id = reader["id"],
+                        Name = reader["name"],
+                        Username = reader["username"],
+                        Position = reader["position"]
+                    });
+                }
+
+                return Ok(players);
             }
             catch (Exception ex)
             {
@@ -132,16 +169,13 @@ namespace AudioAthleteApi.Controllers
         public async Task<IActionResult> AddTeam([FromBody] TeamDto newTeam)
         {
             if (string.IsNullOrWhiteSpace(newTeam.Name) || newTeam.CoachId <= 0)
-            {
                 return BadRequest(new { error = "Team name and valid coach_id are required." });
-            }
 
             try
             {
                 await using var connection = new MySqlConnection(_connectionString);
                 await connection.OpenAsync();
 
-                // Validate coach exists and is actually a coach
                 var coachCheckQuery = @"SELECT COUNT(*) FROM users WHERE id = @coachId AND user_type = 'coach';";
                 await using (var coachCheck = new MySqlCommand(coachCheckQuery, connection))
                 {
@@ -151,23 +185,59 @@ namespace AudioAthleteApi.Controllers
                         return BadRequest(new { error = "Coach ID not found or not a coach." });
                 }
 
-                // Insert team WITH the generated join_code
+                var joinCode = GenerateJoinCode();
+
                 var query = @"
                     INSERT INTO teams (coach_id, name, join_code)
                     VALUES (@coachId, @name, @joinCode);
+                    SELECT LAST_INSERT_ID();
                 ";
 
                 await using var command = new MySqlCommand(query, connection);
                 command.Parameters.AddWithValue("@coachId", newTeam.CoachId);
                 command.Parameters.AddWithValue("@name", newTeam.Name);
-                command.Parameters.AddWithValue("@joinCode", GenerateJoinCode());
+                command.Parameters.AddWithValue("@joinCode", joinCode);
 
-                var rowsAffected = await command.ExecuteNonQueryAsync();
+                var newTeamId = Convert.ToInt32(await command.ExecuteScalarAsync());
 
-                if (rowsAffected > 0)
-                    return Ok(new { message = "Team added successfully!" });
+                return Ok(new
+                {
+                    message = "Team created successfully!",
+                    team_id = newTeamId,
+                    join_code = joinCode
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
 
-                return StatusCode(500, new { error = "Failed to add team." });
+        //--------------------------------------------------//
+        //         REGENERATE JOIN CODE                     //
+        //--------------------------------------------------//
+        [HttpPost("{id}/regenerate-code")]
+        public async Task<IActionResult> RegenerateJoinCode(int id)
+        {
+            if (id <= 0) return BadRequest(new { error = "Invalid team ID." });
+
+            try
+            {
+                await using var connection = new MySqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                var newCode = GenerateJoinCode();
+
+                var query = @"UPDATE teams SET join_code = @joinCode WHERE id = @id;";
+                await using var command = new MySqlCommand(query, connection);
+                command.Parameters.AddWithValue("@joinCode", newCode);
+                command.Parameters.AddWithValue("@id", id);
+
+                var rows = await command.ExecuteNonQueryAsync();
+                if (rows == 0) return NotFound(new { error = "Team not found." });
+
+                return Ok(new { message = "Join code regenerated.", join_code = newCode });
             }
             catch (Exception ex)
             {
@@ -209,9 +279,6 @@ namespace AudioAthleteApi.Controllers
         }
     }
 
-    //--------------------------------------------------//
-    //                    TEAM DTO                      //
-    //--------------------------------------------------//
     public class TeamDto
     {
         public int CoachId { get; set; }

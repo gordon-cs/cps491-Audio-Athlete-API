@@ -19,8 +19,8 @@ namespace AudioAthleteApi.Controllers
         //--------------------------------------------------//
         //               ADD PLAYER TO ROSTER               //
         //--------------------------------------------------//
-        [HttpPost("{coachId}/add")]
-        public async Task<IActionResult> AddPlayer(int coachId, [FromBody] RosterPlayerDto player)
+        [HttpPost("{teamId}/add")]
+        public async Task<IActionResult> AddPlayer(int teamId, [FromBody] RosterPlayerDto player)
         {
             if (string.IsNullOrWhiteSpace(player.Name) ||
                 string.IsNullOrWhiteSpace(player.Username) ||
@@ -36,22 +36,16 @@ namespace AudioAthleteApi.Controllers
                 await connection.OpenAsync();
                 await using var transaction = await connection.BeginTransactionAsync();
 
-                var teamQuery = @"SELECT team_id FROM users WHERE id = @coachId AND user_type = 'coach';";
-
-                int? teamId = null;
-
-                await using (var cmd = new MySqlCommand(teamQuery, connection, transaction))
+                var teamCheckQuery = @"SELECT COUNT(*) FROM teams WHERE id = @teamId;";
+                await using (var cmd = new MySqlCommand(teamCheckQuery, connection, transaction))
                 {
-                    cmd.Parameters.AddWithValue("@coachId", coachId);
-
-                    var result = await cmd.ExecuteScalarAsync();
-                    if (result == null || result == DBNull.Value)
+                    cmd.Parameters.AddWithValue("@teamId", teamId);
+                    var exists = Convert.ToInt32(await cmd.ExecuteScalarAsync());
+                    if (exists == 0)
                     {
                         await transaction.RollbackAsync();
-                        return NotFound(new { error = "Coach not found or no team assigned." });
+                        return NotFound(new { error = "Team not found." });
                     }
-
-                    teamId = Convert.ToInt32(result);
                 }
 
                 int playerId;
@@ -113,12 +107,10 @@ namespace AudioAthleteApi.Controllers
                 cmd.Parameters.AddWithValue("@playerId", playerId);
                 cmd.Parameters.AddWithValue("@name", update.Name ?? (object)DBNull.Value);
                 cmd.Parameters.AddWithValue("@username", update.Username ?? (object)DBNull.Value);
-
                 cmd.Parameters.AddWithValue("@password",
                     update.Password != null
                         ? HashPassword(update.Password)
                         : (object)DBNull.Value);
-
                 cmd.Parameters.AddWithValue("@position", update.Position ?? (object)DBNull.Value);
 
                 var rows = await cmd.ExecuteNonQueryAsync();
@@ -165,9 +157,6 @@ namespace AudioAthleteApi.Controllers
             }
         }
 
-        //--------------------------------------------------//
-        //               PASSWORD HASHING                   //
-        //--------------------------------------------------//
         private string HashPassword(string password)
         {
             byte[] salt = new byte[16];
@@ -191,9 +180,6 @@ namespace AudioAthleteApi.Controllers
         }
     }
 
-    //--------------------------------------------------//
-    //                    DTO CLASSES                   //
-    //--------------------------------------------------//
     public class RosterPlayerDto
     {
         public string Name { get; set; } = string.Empty;
