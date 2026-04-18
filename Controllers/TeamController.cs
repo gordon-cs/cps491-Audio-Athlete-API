@@ -119,7 +119,7 @@ namespace AudioAthleteApi.Controllers
         }
 
         //--------------------------------------------------//
-        //        ADDED: GET ALL PLAYERS ON A TEAM          //
+        //        GET ALL PLAYERS ON A TEAM                 //
         //--------------------------------------------------//
         [HttpGet("{id}/players")]
         public async Task<IActionResult> GetPlayersByTeam(int id)
@@ -215,7 +215,7 @@ namespace AudioAthleteApi.Controllers
         }
 
         //--------------------------------------------------//
-        //         ADDED: REGENERATE JOIN CODE              //
+        //         REGENERATE JOIN CODE                     //
         //--------------------------------------------------//
         [HttpPost("{id}/regenerate-code")]
         public async Task<IActionResult> RegenerateJoinCode(int id)
