@@ -21,17 +21,6 @@ namespace AudioAthleteApi.Controllers
             _connectionString = config.GetConnectionString("DefaultDb");
         }
 
-        //--------------------------------------------------//
-        //       HELPER FOR GENERATING JOIN CODE            //
-        //--------------------------------------------------//
-        private string GenerateJoinCode()
-        {
-            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-            var random = new Random();
-            return new string(Enumerable.Repeat(chars, 6)
-                .Select(s => s[random.Next(s.Length)]).ToArray());
-        }
-
         [HttpGet]
         public async Task<IActionResult> GetUsers()
         {
@@ -103,22 +92,17 @@ namespace AudioAthleteApi.Controllers
                         return BadRequest(new { error = "Email already exists." });
                 }
 
-                int userId;
-                int? teamIdToAssign = null;
-
                 if (newUser.UserType.Equals("coach", StringComparison.OrdinalIgnoreCase))
                 {
                     if (string.IsNullOrWhiteSpace(newUser.Email))
                         return BadRequest(new { error = "Email is required when creating a coach." });
-
-                    if (string.IsNullOrWhiteSpace(newUser.TeamName))
-                        return BadRequest(new { error = "Team name is required when creating a coach." });
 
                     var insertCoachQuery = @"
                         INSERT INTO users (name, username, password, user_type, coach_email, position)
                         VALUES (@name, @username, @password, @userType, @coachEmail, NULL);
                         SELECT LAST_INSERT_ID();
                     ";
+                    int userId;
                     await using (var cmd = new MySqlCommand(insertCoachQuery, connection, transaction))
                     {
                         cmd.Parameters.AddWithValue("@name", newUser.Name);
@@ -130,28 +114,6 @@ namespace AudioAthleteApi.Controllers
                         userId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
                     }
 
-                    // UPDATED: Added join_code to the INSERT statement
-                    var insertTeamQuery = @"
-                        INSERT INTO teams (name, coach_id, join_code)
-                        VALUES (@teamName, @coachId, @joinCode);
-                        SELECT LAST_INSERT_ID();
-                    ";
-                    await using (var cmd = new MySqlCommand(insertTeamQuery, connection, transaction))
-                    {
-                        cmd.Parameters.AddWithValue("@teamName", newUser.TeamName);
-                        cmd.Parameters.AddWithValue("@coachId", userId);
-                        cmd.Parameters.AddWithValue("@joinCode", GenerateJoinCode()); // Generates code here
-
-                        teamIdToAssign = Convert.ToInt32(await cmd.ExecuteScalarAsync());
-                    }
-
-                    var updateCoachQuery = @"UPDATE users SET team_id = @teamId WHERE id = @coachId;";
-                    await using (var cmd = new MySqlCommand(updateCoachQuery, connection, transaction))
-                    {
-                        cmd.Parameters.AddWithValue("@teamId", teamIdToAssign);
-                        cmd.Parameters.AddWithValue("@coachId", userId);
-                        await cmd.ExecuteNonQueryAsync();
-                    }
 
                     await transaction.CommitAsync();
 
@@ -167,9 +129,8 @@ namespace AudioAthleteApi.Controllers
 
                     return Ok(new
                     {
-                        message = $"{newUser.UserType} created successfully! Email attempted.",
-                        user_id = userId,
-                        assigned_team_id = teamIdToAssign
+                        message = "Coach created successfully! Use POST /api/teams to create and manage teams.",
+                        user_id = userId
                     });
                 }
                 else if (newUser.UserType.Equals("player", StringComparison.OrdinalIgnoreCase))
@@ -177,14 +138,12 @@ namespace AudioAthleteApi.Controllers
                     if (string.IsNullOrWhiteSpace(newUser.Position))
                         return BadRequest(new { error = "Position is required for players." });
 
-                    if (newUser.CoachId is null)
-                        return BadRequest(new { error = "CoachId is required when creating a player." });
-
                     var insertPlayerQuery = @"
                         INSERT INTO users (name, username, password, user_type, position)
                         VALUES (@name, @username, @password, @userType, @position);
                         SELECT LAST_INSERT_ID();
                     ";
+                    int userId;
                     await using (var cmd = new MySqlCommand(insertPlayerQuery, connection, transaction))
                     {
                         cmd.Parameters.AddWithValue("@name", newUser.Name);
@@ -196,35 +155,12 @@ namespace AudioAthleteApi.Controllers
                         userId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
                     }
 
-                    var getCoachTeamQuery = @"
-                        SELECT team_id FROM users WHERE id = @coachId AND user_type = 'coach';
-                    ";
-                    await using (var cmd = new MySqlCommand(getCoachTeamQuery, connection, transaction))
-                    {
-                        cmd.Parameters.AddWithValue("@coachId", newUser.CoachId);
-                        var result = await cmd.ExecuteScalarAsync();
-
-                        if (result == null || result == DBNull.Value)
-                            return BadRequest(new { error = "Invalid CoachId or coach has no team assigned." });
-
-                        teamIdToAssign = Convert.ToInt32(result);
-                    }
-
-                    var updatePlayerTeamQuery = @"UPDATE users SET team_id = @teamId WHERE id = @playerId;";
-                    await using (var cmd = new MySqlCommand(updatePlayerTeamQuery, connection, transaction))
-                    {
-                        cmd.Parameters.AddWithValue("@teamId", teamIdToAssign);
-                        cmd.Parameters.AddWithValue("@playerId", userId);
-                        await cmd.ExecuteNonQueryAsync();
-                    }
-
                     await transaction.CommitAsync();
 
                     return Ok(new
                     {
-                        message = $"{newUser.UserType} created successfully!",
-                        user_id = userId,
-                        assigned_team_id = teamIdToAssign
+                        message = "Player created successfully! Use POST /api/users/join with a team code to join a team.",
+                        user_id = userId
                     });
                 }
 
@@ -303,7 +239,6 @@ namespace AudioAthleteApi.Controllers
                 await updateCmd.ExecuteNonQueryAsync();
 
                 var resetUrl = $"http://localhost:8081/main/resetPassword?token={token}";
-
 
                 await SendEmailAsync(
                     dto.Email,
@@ -449,8 +384,6 @@ namespace AudioAthleteApi.Controllers
         public string Password { get; set; } = string.Empty;
         public string UserType { get; set; } = string.Empty;
         public string? Email { get; set; }
-        public string? TeamName { get; set; }
-        public int? CoachId { get; set; }
         public string? Position { get; set; }
     }
 
