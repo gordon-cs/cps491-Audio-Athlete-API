@@ -50,8 +50,8 @@ namespace AudioAthleteApi.Controllers
 
                 int playerId;
                 var insertPlayer = @"
-                    INSERT INTO users (name, username, password, user_type, position, team_id)
-                    VALUES (@name, @username, @password, 'player', @position, @teamId);
+                    INSERT INTO users (name, username, password, user_type, position, team_id,coach_email)
+                    VALUES (@name, @username, @password, 'player', @position, @teamId, @email);
                     SELECT LAST_INSERT_ID();
                 ";
 
@@ -62,7 +62,8 @@ namespace AudioAthleteApi.Controllers
                     cmd.Parameters.AddWithValue("@password", HashPassword(player.Password));
                     cmd.Parameters.AddWithValue("@position", player.Position);
                     cmd.Parameters.AddWithValue("@teamId", teamId);
-
+                    cmd.Parameters.AddWithValue("@email", player.Email ?? (object)DBNull.Value);
+                    
                     playerId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
                 }
 
@@ -186,6 +187,7 @@ namespace AudioAthleteApi.Controllers
         public string Username { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string Position { get; set; } = string.Empty;
+        public string? Email { get; set; }
     }
 
     public class RosterPlayerUpdateDto
@@ -194,5 +196,6 @@ namespace AudioAthleteApi.Controllers
         public string? Username { get; set; }
         public string? Password { get; set; }
         public string? Position { get; set; }
+        
     }
 }
