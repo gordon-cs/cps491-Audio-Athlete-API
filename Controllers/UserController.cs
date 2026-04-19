@@ -139,8 +139,8 @@ namespace AudioAthleteApi.Controllers
                         return BadRequest(new { error = "Position is required for players." });
 
                     var insertPlayerQuery = @"
-                        INSERT INTO users (name, username, password, user_type, position)
-                        VALUES (@name, @username, @password, @userType, @position);
+                        INSERT INTO users (name, username, password, user_type, position, coach_email)
+                        VALUES (@name, @username, @password, @userType, @position, @email);
                         SELECT LAST_INSERT_ID();
                     ";
                     int userId;
@@ -151,7 +151,7 @@ namespace AudioAthleteApi.Controllers
                         cmd.Parameters.AddWithValue("@password", HashPassword(newUser.Password));
                         cmd.Parameters.AddWithValue("@userType", newUser.UserType);
                         cmd.Parameters.AddWithValue("@position", newUser.Position);
-
+                        cmd.Parameters.AddWithValue("@email", newUser.Email ?? (object)DBNull.Value);
                         userId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
                     }
 
