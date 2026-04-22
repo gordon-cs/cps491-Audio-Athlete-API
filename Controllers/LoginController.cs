@@ -36,7 +36,7 @@ namespace AudioAthleteApi.Controllers
                 await connection.OpenAsync();
 
                 var query = @"
-                    SELECT id, name, username, password, user_type, coach_email, team_id
+                    SELECT id, name, username, password, user_type, email, team_id
                     FROM users
                     WHERE username = @username
                     LIMIT 1;
@@ -56,17 +56,53 @@ namespace AudioAthleteApi.Controllers
 
                 var userId = Convert.ToInt32(reader["id"]);
                 var username = reader["username"].ToString();
+                var name = reader["name"];
+                var userType = reader["user_type"].ToString();
+                var email = reader["email"] == DBNull.Value ? null : reader["email"];
+                var teamId = reader["team_id"] == DBNull.Value ? null : reader["team_id"];
+
+                await reader.CloseAsync();
 
                 var token = GenerateJwtToken(userId, username);
+                var coachTeams = new List<object>();
+                int? resolvedTeamId = teamId == null ? null : Convert.ToInt32(teamId);
+
+                if (string.Equals(userType, "coach", StringComparison.OrdinalIgnoreCase))
+                {
+                    var teamsQuery = @"
+                        SELECT id, name, join_code
+                        FROM teams
+                        WHERE coach_id = @coachId
+                        ORDER BY name ASC;
+                    ";
+
+                    await using var teamsCmd = new MySqlCommand(teamsQuery, connection);
+                    teamsCmd.Parameters.AddWithValue("@coachId", userId);
+
+                    await using var teamsReader = await teamsCmd.ExecuteReaderAsync();
+                    while (await teamsReader.ReadAsync())
+                    {
+                        var coachTeamId = Convert.ToInt32(teamsReader["id"]);
+                        resolvedTeamId ??= coachTeamId;
+
+                        coachTeams.Add(new
+                        {
+                            Id = coachTeamId,
+                            Name = teamsReader["name"],
+                            JoinCode = teamsReader["join_code"] == DBNull.Value ? null : teamsReader["join_code"]
+                        });
+                    }
+                }
 
                 var user = new
                 {
                     Id = userId,
-                    Name = reader["name"],
+                    Name = name,
                     Username = username,
-                    UserType = reader["user_type"],
-                    Email = reader["coach_email"] == DBNull.Value ? null : reader["coach_email"],
-                    TeamId = reader["team_id"] == DBNull.Value ? null : reader["team_id"]
+                    UserType = userType,
+                    Email = email,
+                    TeamId = resolvedTeamId,
+                    Teams = coachTeams
                 };
 
                 return Ok(new

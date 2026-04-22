@@ -21,6 +21,14 @@ namespace AudioAthleteApi.Controllers
             _connectionString = config.GetConnectionString("DefaultDb");
         }
 
+        private string GenerateJoinCode()
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            var random = new Random();
+            return new string(Enumerable.Repeat(chars, 6)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
+        }
+
         [HttpGet]
         public async Task<IActionResult> GetUsers()
         {
@@ -31,7 +39,7 @@ namespace AudioAthleteApi.Controllers
                 await connection.OpenAsync();
 
                 var query = @"
-                    SELECT id, name, username, password, position, user_type, coach_email, team_id
+                    SELECT id, name, username, password, position, user_type, email, team_id
                     FROM users;
                 ";
                 await using var command = new MySqlCommand(query, connection);
@@ -46,7 +54,7 @@ namespace AudioAthleteApi.Controllers
                         Username = reader["username"],
                         Password = reader["password"],
                         UserType = reader["user_type"],
-                        Email = reader["coach_email"] == DBNull.Value ? null : reader["coach_email"],
+                        Email = reader["email"] == DBNull.Value ? null : reader["email"],
                         TeamId = reader["team_id"] == DBNull.Value ? null : reader["team_id"],
                         Position = reader["position"]
                     });
@@ -85,7 +93,7 @@ namespace AudioAthleteApi.Controllers
 
                 if (!string.IsNullOrWhiteSpace(newUser.Email))
                 {
-                    var checkEmail = new MySqlCommand("SELECT COUNT(*) FROM users WHERE coach_email = @email;", connection, transaction);
+                    var checkEmail = new MySqlCommand("SELECT COUNT(*) FROM users WHERE email = @email;", connection, transaction);
                     checkEmail.Parameters.AddWithValue("@email", newUser.Email);
                     var emailExists = Convert.ToInt32(await checkEmail.ExecuteScalarAsync()) > 0;
                     if (emailExists)
@@ -98,8 +106,8 @@ namespace AudioAthleteApi.Controllers
                         return BadRequest(new { error = "Email is required when creating a coach." });
 
                     var insertCoachQuery = @"
-                        INSERT INTO users (name, username, password, user_type, coach_email, position)
-                        VALUES (@name, @username, @password, @userType, @coachEmail, NULL);
+                        INSERT INTO users (name, username, password, user_type, email, position)
+                        VALUES (@name, @username, @password, @userType, @email, NULL);
                         SELECT LAST_INSERT_ID();
                     ";
                     int userId;
@@ -109,11 +117,31 @@ namespace AudioAthleteApi.Controllers
                         cmd.Parameters.AddWithValue("@username", newUser.Username);
                         cmd.Parameters.AddWithValue("@password", HashPassword(newUser.Password));
                         cmd.Parameters.AddWithValue("@userType", newUser.UserType);
-                        cmd.Parameters.AddWithValue("@coachEmail", newUser.Email);
+                        cmd.Parameters.AddWithValue("@email", newUser.Email);
 
                         userId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
                     }
 
+                    int? teamId = null;
+                    string? joinCode = null;
+
+                    if (!string.IsNullOrWhiteSpace(newUser.TeamName))
+                    {
+                        joinCode = GenerateJoinCode();
+
+                        var insertTeamQuery = @"
+                            INSERT INTO teams (coach_id, name, join_code)
+                            VALUES (@coachId, @name, @joinCode);
+                            SELECT LAST_INSERT_ID();
+                        ";
+
+                        await using var teamCmd = new MySqlCommand(insertTeamQuery, connection, transaction);
+                        teamCmd.Parameters.AddWithValue("@coachId", userId);
+                        teamCmd.Parameters.AddWithValue("@name", newUser.TeamName.Trim());
+                        teamCmd.Parameters.AddWithValue("@joinCode", joinCode);
+
+                        teamId = Convert.ToInt32(await teamCmd.ExecuteScalarAsync());
+                    }
 
                     await transaction.CommitAsync();
 
@@ -129,8 +157,12 @@ namespace AudioAthleteApi.Controllers
 
                     return Ok(new
                     {
-                        message = "Coach created successfully! Use POST /api/teams to create and manage teams.",
-                        user_id = userId
+                        message = teamId.HasValue
+                            ? "Coach account and team created successfully!"
+                            : "Coach created successfully! Use POST /api/teams to create and manage teams.",
+                        user_id = userId,
+                        team_id = teamId,
+                        join_code = joinCode
                     });
                 }
                 else if (newUser.UserType.Equals("player", StringComparison.OrdinalIgnoreCase))
@@ -139,7 +171,7 @@ namespace AudioAthleteApi.Controllers
                         return BadRequest(new { error = "Position is required for players." });
 
                     var insertPlayerQuery = @"
-                        INSERT INTO users (name, username, password, user_type, position, coach_email)
+                        INSERT INTO users (name, username, password, user_type, position, email)
                         VALUES (@name, @username, @password, @userType, @position, @email);
                         SELECT LAST_INSERT_ID();
                     ";
@@ -219,7 +251,7 @@ namespace AudioAthleteApi.Controllers
                 await using var connection = new MySqlConnection(_connectionString);
                 await connection.OpenAsync();
 
-                var findUser = @"SELECT id FROM users WHERE coach_email = @Email OR username = @Email;";
+                var findUser = @"SELECT id FROM users WHERE email = @Email OR username = @Email;";
                 await using var cmd = new MySqlCommand(findUser, connection);
                 cmd.Parameters.AddWithValue("@Email", dto.Email);
 
@@ -385,6 +417,7 @@ namespace AudioAthleteApi.Controllers
         public string UserType { get; set; } = string.Empty;
         public string? Email { get; set; }
         public string? Position { get; set; }
+        public string? TeamName { get; set; }
     }
 
     public class ForgotPasswordDto
