@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using MySqlConnector;
 using Isopoh.Cryptography.Argon2;
 using System.Text;
+using System.Security.Claims;
 using Mailjet.Client;
 using Mailjet.Client.Resources;
 using Newtonsoft.Json.Linq;
@@ -145,15 +147,18 @@ namespace AudioAthleteApi.Controllers
 
                     await transaction.CommitAsync();
 
-                    try
+                    _ = Task.Run(async () =>
                     {
-                        await SendEmailAsync(
-                            newUser.Email!,
-                            "Welcome to AudioAthlete",
-                            $"{newUser.Name},<br/><br/>Your coach account has been created successfully!"
-                        );
-                    }
-                    catch { }
+                        try
+                        {
+                            await SendEmailAsync(
+                                newUser.Email!,
+                                "Welcome to AudioAthlete",
+                                $"{newUser.Name},<br/><br/>Your coach account has been created successfully!"
+                            );
+                        }
+                        catch { }
+                    });
 
                     return Ok(new
                     {
@@ -350,6 +355,74 @@ namespace AudioAthleteApi.Controllers
                 return rows > 0
                     ? Ok(new { message = "User deleted successfully!" })
                     : NotFound(new { error = "User not found." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [Authorize]
+        [HttpDelete("me")]
+        public async Task<IActionResult> DeleteMyAccount()
+        {
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdClaim, out var userId) || userId <= 0)
+                return Unauthorized(new { error = "Invalid user token." });
+
+            try
+            {
+                await using var connection = new MySqlConnection(_connectionString);
+                await connection.OpenAsync();
+                await using var transaction = await connection.BeginTransactionAsync();
+
+                string? userType;
+                await using (var userCmd = new MySqlCommand(
+                    "SELECT user_type FROM users WHERE id = @id LIMIT 1;",
+                    connection,
+                    transaction))
+                {
+                    userCmd.Parameters.AddWithValue("@id", userId);
+                    userType = (await userCmd.ExecuteScalarAsync())?.ToString();
+                }
+
+                if (string.IsNullOrWhiteSpace(userType))
+                {
+                    await transaction.RollbackAsync();
+                    return NotFound(new { error = "User not found." });
+                }
+
+                if (!string.Equals(userType, "player", StringComparison.OrdinalIgnoreCase))
+                {
+                    await transaction.RollbackAsync();
+                    return BadRequest(new { error = "Only player self-deletion is supported from the app." });
+                }
+
+                await using (var completionsCmd = new MySqlCommand(
+                    "DELETE FROM workout_completions WHERE player_id = @playerId;",
+                    connection,
+                    transaction))
+                {
+                    completionsCmd.Parameters.AddWithValue("@playerId", userId);
+                    await completionsCmd.ExecuteNonQueryAsync();
+                }
+
+                await using (var deleteUserCmd = new MySqlCommand(
+                    "DELETE FROM users WHERE id = @id AND user_type = 'player';",
+                    connection,
+                    transaction))
+                {
+                    deleteUserCmd.Parameters.AddWithValue("@id", userId);
+                    var deleted = await deleteUserCmd.ExecuteNonQueryAsync();
+                    if (deleted == 0)
+                    {
+                        await transaction.RollbackAsync();
+                        return NotFound(new { error = "Player account not found." });
+                    }
+                }
+
+                await transaction.CommitAsync();
+                return Ok(new { message = "Player account deleted successfully." });
             }
             catch (Exception ex)
             {
