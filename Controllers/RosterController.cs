@@ -50,7 +50,7 @@ namespace AudioAthleteApi.Controllers
 
                 int playerId;
                 var insertPlayer = @"
-                    INSERT INTO users (name, username, password, user_type, position, team_id,coach_email)
+                    INSERT INTO users (name, username, password, user_type, position, team_id, email)
                     VALUES (@name, @username, @password, 'player', @position, @teamId, @email);
                     SELECT LAST_INSERT_ID();
                 ";
